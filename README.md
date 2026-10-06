@@ -65,7 +65,7 @@ cargo install --git https://github.com/Externalize-Labs/externalize externalize-
 | Command | What it does |
 |---|---|
 | `externalize verify proof.json` | Verify a bundle; `--events` decodes every proven contract event, `--json` for machines. Exit 0 verified, 1 rejected, 2 could not run |
-| `externalize inspect proof.json` | Show what a bundle claims, without trusting any of it |
+| `externalize inspect proof.json` | Show what a bundle claims, without trusting any of it; `--json` for machines |
 | `externalize certify --ledger ledger-….xdr.gz --scp scp-….xdr.gz` | Certify all 64 ledgers of a history archive checkpoint |
 | `externalize trust show [--network testnet]` | Print a built-in trust set |
 | `externalize trust derive scp-….xdr.gz --names-from trust/public.toml` | Rebuild a trust set from what validators actually used |
@@ -88,12 +88,33 @@ let verified = Bundle::from_json(&std::fs::read_to_string("proof.json")?)?.verif
 println!("ledger {} certified by {} validators", verified.ledger.sequence(), verified.ledger.signers().len());
 ```
 
-`externalize-core` builds for `wasm32-unknown-unknown`, so the same checks run
-in a browser wallet. Verifying the mainnet fixture bundle (30 signatures and
-two claims) takes about 6.6 ms on a laptop; `cargo bench` reproduces it.
+Verifying the mainnet fixture bundle (30 signatures and two claims) takes
+about 6.6 ms on a laptop; `cargo bench` reproduces it.
 
 The lower-level API (`Certificate`, `inclusion`, `verify_ancestors`,
 `archive`) works on raw XDR with no JSON involved.
+
+## Use it from JavaScript
+
+`externalize-wasm` is the same verifier for wallets and dapps, so a page can
+check what an RPC told it without trusting the RPC. Releases attach builds for
+browsers and Node (666 KB, 212 KB gzipped).
+
+```js
+import init, { verify, inspect } from "./externalize_wasm.js";
+await init();
+
+const report = verify(bundleJson); // built-in trust set for the bundle's network
+if (!report.verified) throw new Error(report.error);
+console.log(`ledger ${report.ledger.sequence}, signed by ${report.ledger.signers.length} validators`);
+```
+
+`verify(bundle, trustToml?, events?)` returns the same report as
+`externalize verify --json`; a bundle that fails is a report with
+`verified: false`, never an exception. `inspect(bundle)` shows what a bundle
+claims, marked unverified. [`examples/web`](examples/web/index.html) is a page
+that verifies a dropped bundle locally; CI runs the package from Node against
+the mainnet fixture.
 
 ## How it works
 
@@ -114,6 +135,8 @@ producing or verifying bundles in another language, is specified in
 |---|---|
 | `crates/externalize-core` | Verification library: quorum sets, SCP signatures, certificates, inclusion proofs, bundles |
 | `crates/externalize-cli` | The `externalize` binary |
+| `crates/externalize-wasm` | The verifier for JavaScript, via wasm-bindgen |
+| `examples/web` | A browser page that verifies a bundle locally |
 | `trust/` | Public-network and testnet trust sets, derived from archived SCP data |
 | `docs/` | Trust model and bundle format specification |
 | `crates/externalize-core/tests/fixtures/mainnet` | Real archive checkpoint and RPC data; `bundle-64791359.json` is the conformance fixture `exnode` must reproduce byte for byte |
@@ -123,7 +146,7 @@ producing or verifying bundles in another language, is specified in
 1. **Verifier and bundle format.** Done: this repository.
 2. **Bundle node.** Done:
    [`externalize-node`](https://github.com/Externalize-Labs/externalize-node).
-3. **Wallet package.** A WASM/npm build so wallets can check RPC answers.
+3. **Wallet package.** Done: `externalize-wasm`, for browsers and Node.
 4. **Live collector.** An overlay peer that certifies ledgers before archives publish them.
 5. **On-chain verifier.** A Soroban header registry so contracts can act on past events.
 6. **ZK wrapper.** Prove a certificate inside a zkVM, so other chains can verify Stellar.
