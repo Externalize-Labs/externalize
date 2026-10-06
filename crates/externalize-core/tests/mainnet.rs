@@ -321,3 +321,29 @@ fn oversized_bundles_are_refused_before_any_work() {
     assert!(matches!(b.verify(&trust()), Err(Error::TooLarge { what: "claims", .. })));
     assert!(matches!(Bundle::from_json(&b.to_json().unwrap()), Err(Error::TooLarge { .. })));
 }
+
+#[test]
+fn replaying_one_validators_signature_cannot_fake_a_quorum() {
+    let t = trust();
+    let c = last();
+    let ScpHistoryEntry::V0(e) = &c.scp;
+    let one = e.ledger_messages.messages[0].clone();
+    let forged = with_envelopes(c, |_| Some(one.clone()));
+    assert_eq!(forged.verify(&t).unwrap_err(), Error::QuorumNotSatisfied { ledger: LAST, signers: 1 });
+}
+
+#[test]
+fn untrusted_validators_never_count_even_with_valid_signatures() {
+    let t = trust();
+    let sdf_only = TrustSet::new(
+        Network::public(),
+        ScpQuorumSet {
+            threshold: 1,
+            validators: VecM::default(),
+            inner_sets: vec![t.quorum().inner_sets[1].clone()].try_into().unwrap(),
+        },
+    )
+    .unwrap();
+    let ledger = last().verify(&sdf_only).unwrap();
+    assert_eq!(ledger.signers().len(), 3, "only SDF's three validators are trusted");
+}
