@@ -12,6 +12,7 @@ use externalize_core::{Bundle, Network, TrustSet, archive, quorum};
 use serde_json::json;
 
 const PUBLIC_TRUST: &str = include_str!("../../../trust/public.toml");
+const TESTNET_TRUST: &str = include_str!("../../../trust/testnet.toml");
 
 #[derive(Parser)]
 #[command(
@@ -30,7 +31,7 @@ enum Command {
     Verify {
         /// Bundle file (`-` for stdin).
         bundle: PathBuf,
-        /// Trust set to verify against. Defaults to the built-in public-network tier-1.
+        /// Trust set to verify against. Defaults to the built-in set for the bundle's network.
         #[arg(long)]
         trust: Option<PathBuf>,
         /// Print a machine-readable result.
@@ -45,9 +46,12 @@ enum Command {
         /// `scp-*.xdr.gz` file from the same checkpoint.
         #[arg(long)]
         scp: PathBuf,
-        /// Trust set. Defaults to the built-in public-network tier-1.
+        /// Trust set. Defaults to the built-in set for `--network`.
         #[arg(long)]
         trust: Option<PathBuf>,
+        /// Network for the built-in trust set (`public` or `testnet`).
+        #[arg(long, default_value = "public")]
+        network: String,
     },
     /// Inspect or derive trust sets.
     #[command(subcommand)]
@@ -56,10 +60,13 @@ enum Command {
 
 #[derive(Subcommand)]
 enum TrustCommand {
-    /// Summarize a trust set (the built-in one if no file is given).
+    /// Summarize a trust set (the built-in one for `--network` if no file is given).
     Show {
         /// Trust file.
         file: Option<PathBuf>,
+        /// Network for the built-in trust set (`public` or `testnet`).
+        #[arg(long, default_value = "public")]
+        network: String,
     },
     /// Print, as TOML, the quorum set most validators referenced in an archive `scp-*.xdr.gz` file.
     ///
@@ -86,9 +93,9 @@ fn main() -> ExitCode {
 fn run(cli: Cli) -> Result<ExitCode, String> {
     match cli.command {
         Command::Verify { bundle, trust, json } => verify(&bundle, trust.as_deref(), json),
-        Command::Certify { ledger, scp, trust } => certify(&ledger, &scp, trust.as_deref()),
-        Command::Trust(TrustCommand::Show { file }) => {
-            print!("{}", describe(&load_trust(file.as_deref())?));
+        Command::Certify { ledger, scp, trust, network } => certify(&ledger, &scp, trust.as_deref(), &network),
+        Command::Trust(TrustCommand::Show { file, network }) => {
+            print!("{}", describe(&load_trust(file.as_deref(), &network)?));
             Ok(ExitCode::SUCCESS)
         }
         Command::Trust(TrustCommand::Derive { scp, network }) => {
@@ -107,17 +114,27 @@ fn read_input(path: &Path) -> Result<String, String> {
     std::fs::read_to_string(path).map_err(|e| format!("reading {}: {e}", path.display()))
 }
 
-fn load_trust(path: Option<&Path>) -> Result<TrustSet, String> {
+/// Loads `path`, or the built-in trust set for `network` when no path is given.
+fn load_trust(path: Option<&Path>, network: &str) -> Result<TrustSet, String> {
     let text = match path {
         Some(p) => read_input(p)?,
-        None => PUBLIC_TRUST.to_owned(),
+        None => match Network::from_name(network).passphrase() {
+            Network::PUBLIC => PUBLIC_TRUST.to_owned(),
+            Network::TESTNET => TESTNET_TRUST.to_owned(),
+            other => return Err(format!("no built-in trust set for {other:?}; pass --trust")),
+        },
     };
     TrustSet::from_toml(&text).map_err(|e| e.to_string())
 }
 
 fn verify(bundle: &Path, trust: Option<&Path>, as_json: bool) -> Result<ExitCode, String> {
-    let trust = load_trust(trust)?;
-    let outcome = Bundle::from_json(&read_input(bundle)?).and_then(|b| b.verify(&trust));
+    let outcome = match Bundle::from_json(&read_input(bundle)?) {
+        Ok(b) => {
+            let trust = load_trust(trust, &b.network)?;
+            b.verify(&trust)
+        }
+        Err(e) => Err(e),
+    };
     match (&outcome, as_json) {
         (Ok(v), true) => println!("{}", report_json(v)),
         (Ok(v), false) => print!("{}", report_text(v)),
@@ -228,8 +245,8 @@ fn read_scp(path: &Path) -> Result<Vec<ScpHistoryEntry>, String> {
 }
 
 /// Certifies each ledger of a checkpoint. Exit status 1 if any ledger fails.
-fn certify(ledger: &Path, scp: &Path, trust: Option<&Path>) -> Result<ExitCode, String> {
-    let trust = load_trust(trust)?;
+fn certify(ledger: &Path, scp: &Path, trust: Option<&Path>, network: &str) -> Result<ExitCode, String> {
+    let trust = load_trust(trust, network)?;
     let certs = archive::certificates(read_gz(ledger)?, &read_scp(scp)?);
     if certs.is_empty() {
         return Err("no ledger in the files has SCP messages".into());

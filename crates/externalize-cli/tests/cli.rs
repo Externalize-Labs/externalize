@@ -92,3 +92,24 @@ validators = [\"GABMKJM6I25XI4K7U6XWMULOUQIQ27BCTMLS6BYYSOWKTBUXVRJSXHYQ\"]
     .unwrap();
     cli().args(["certify", "--ledger", LEDGER, "--scp", SCP, "--trust", dir.to_str().unwrap()]).assert().code(1);
 }
+
+const TESTNET: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../externalize-core/tests/fixtures/testnet");
+
+#[test]
+fn testnet_has_a_built_in_trust_set() {
+    let out = cli()
+        .args(["certify", "--network", "testnet"])
+        .arg("--ledger")
+        .arg(format!("{TESTNET}/ledger-004d19ff.xdr.gz"))
+        .arg("--scp")
+        .arg(format!("{TESTNET}/scp-004d19ff.xdr.gz"))
+        .output()
+        .unwrap();
+    assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
+    assert!(stdout(cli().args(["trust", "show", "--network", "testnet"])).contains("Stellar Development Foundation"));
+}
+
+#[test]
+fn mainnet_signatures_do_not_certify_testnet_trust() {
+    cli().args(["certify", "--network", "testnet", "--ledger", LEDGER, "--scp", SCP]).assert().code(1);
+}
