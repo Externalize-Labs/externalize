@@ -1,0 +1,18 @@
+# Externalize trust set: the SDF test network.
+#
+# Testnet is run by the Stellar Development Foundation's three validators.
+# Derived from history archive checkpoint 5052927 (2026-10-06) with
+# `externalize trust derive --network testnet`.
+
+network = "testnet"
+threshold = 1
+
+[[org]]
+name = "Stellar Development Foundation"
+home_domain = "testnet.stellar.org"
+threshold = 2
+validators = [
+  "GCUCJTIYXSOXKBSNFGNFWW5MUQ54HKRPGJUTQFJ5RQXZXNOLNXYDHRAP",
+  "GC2V2EFSXN6SQTWVYA5EPJPBWWIMSD2XQNKUOHGEKB535AQE2I6IXV2Z",
+  "GDKXE2OZMJIPOSLNA6N6F2BVCI3O777I2OOC4BV7VOYUEHYX7RTRYA7Y",
+]
