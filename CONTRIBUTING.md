@@ -22,8 +22,18 @@ cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace
 ```
 
-CI runs the same commands on Linux, macOS and Windows, builds the core for
-`wasm32-unknown-unknown`, and checks the MSRV.
+CI runs the same commands on Linux, macOS and Windows, checks the MSRV, and
+builds `externalize-wasm` and runs it from Node against the mainnet fixture.
+To try that locally:
+
+```sh
+cargo build -p externalize-wasm --target wasm32-unknown-unknown --profile wasm
+wasm-bindgen --target nodejs --out-dir pkg target/wasm32-unknown-unknown/wasm/externalize_wasm.wasm
+node crates/externalize-wasm/tests/node.cjs pkg
+```
+
+A change to what the verifier reports goes through `externalize_core::report`,
+so the CLI's `--json` output and the WASM package stay identical.
 
 ## Ground rules
 
