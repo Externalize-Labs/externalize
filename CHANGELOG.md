@@ -22,5 +22,12 @@ All notable changes to this project are documented here. The format follows
 - Property test showing random corruption never yields a false proof.
 - Benchmarks: verifying the mainnet fixture bundle takes about 6.6 ms.
 - Release workflow publishing binaries for Linux, macOS and Windows.
+- `externalize-wasm`: `verify` and `inspect` for browsers and Node, with the
+  built-in trust sets, a size-first build profile (666 KB), a browser example,
+  and a CI job that verifies the mainnet fixture from Node. Releases attach
+  web and Node packages.
+- `report` feature in `externalize-core`: the JSON report and built-in trust
+  sets shared by the CLI and the WASM package.
+- `externalize inspect --json`.
 
 [Unreleased]: https://github.com/Externalize-Labs/externalize/commits/main
