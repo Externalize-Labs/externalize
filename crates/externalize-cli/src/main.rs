@@ -41,6 +41,9 @@ enum Command {
     Inspect {
         /// Bundle file (`-` for stdin).
         bundle: PathBuf,
+        /// Machine-readable output, the same shape the WASM package's `inspect` returns.
+        #[arg(long)]
+        json: bool,
     },
     /// Certify every ledger in a history archive checkpoint, from its `ledger-*` and `scp-*` files.
     Certify {
@@ -100,9 +103,13 @@ fn main() -> ExitCode {
 fn run(cli: Cli) -> Result<ExitCode, String> {
     match cli.command {
         Command::Verify { bundle, trust, json, events } => verify(&bundle, trust.as_deref(), json, events),
-        Command::Inspect { bundle } => {
+        Command::Inspect { bundle, json } => {
             let b = Bundle::from_json(&read_input(&bundle)?).map_err(|e| e.to_string())?;
-            print!("{}", inspect(&b));
+            if json {
+                println!("{}", report::inspect(&b));
+            } else {
+                print!("{}", inspect(&b));
+            }
             Ok(ExitCode::SUCCESS)
         }
         Command::Certify { ledger, scp, trust, network } => certify(&ledger, &scp, trust.as_deref(), &network),

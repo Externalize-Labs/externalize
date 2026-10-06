@@ -136,6 +136,12 @@ fn inspect_describes_without_verifying() {
     let s = String::from_utf8(out.stdout).unwrap();
     assert!(s.starts_with("UNVERIFIED bundle for ledger 64791359"), "{s}");
     assert!(s.contains("30 envelopes (30 externalize)") && s.contains("op 1, 4 events"), "{s}");
+
+    let out = cli().args(["inspect", "--json", BUNDLE]).output().unwrap();
+    let j: serde_json::Value = serde_json::from_slice(&out.stdout).unwrap();
+    assert_eq!(j["verified"], false, "inspection never claims verification");
+    assert_eq!(j["externalize_envelopes"], 30);
+    assert_eq!(j["claims"][1]["events"], 4);
 }
 
 #[test]
