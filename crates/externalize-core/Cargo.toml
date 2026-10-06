@@ -1,0 +1,37 @@
+[package]
+name = "externalize-core"
+description = "Verify Stellar ledgers, transactions and Soroban events from validator signatures."
+keywords = ["stellar", "soroban", "scp", "light-client", "verification"]
+categories = ["cryptography", "cryptography::cryptocurrencies"]
+readme = "../../README.md"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+authors.workspace = true
+
+[features]
+default = ["bundle", "config"]
+# JSON proof bundles (`Bundle`).
+bundle = ["dep:serde", "dep:serde_json", "dep:hex"]
+# TOML trust-set files (`TrustSet::from_toml`).
+config = ["dep:serde", "dep:toml"]
+
+[dependencies]
+stellar-xdr.workspace = true
+ed25519-dalek.workspace = true
+sha2.workspace = true
+thiserror.workspace = true
+serde = { workspace = true, optional = true }
+serde_json = { workspace = true, optional = true }
+toml = { workspace = true, optional = true }
+hex = { workspace = true, optional = true }
+
+[dev-dependencies]
+flate2.workspace = true
+hex.workspace = true
+
+[lints]
+workspace = true

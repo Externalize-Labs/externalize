@@ -1,0 +1,45 @@
+[workspace]
+resolver = "3"
+members = ["crates/externalize-core", "crates/externalize-cli"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.88"
+license = "Apache-2.0"
+repository = "https://github.com/Externalize-Labs/externalize"
+homepage = "https://github.com/Externalize-Labs"
+authors = ["Externalize Labs"]
+
+[workspace.dependencies]
+externalize-core = { path = "crates/externalize-core", version = "0.1.0" }
+stellar-xdr = { version = "28.0.1", default-features = false, features = ["std", "base64"] }
+ed25519-dalek = { version = "3", default-features = false }
+sha2 = "0.11"
+thiserror = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+toml = "0.9"
+hex = "0.4"
+base64 = "0.22"
+clap = { version = "4.6", default-features = false, features = ["std", "derive", "help", "usage", "error-context", "suggestions"] }
+flate2 = "1.1"
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+missing_docs = "warn"
+
+[workspace.lints.clippy]
+unwrap_used = "deny"
+expect_used = "deny"
+panic = "deny"
+indexing_slicing = "warn"
+arithmetic_side_effects = "warn"
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
+
+# Signature verification dominates test time; optimize dependencies in dev builds.
+[profile.dev.package."*"]
+opt-level = 3
