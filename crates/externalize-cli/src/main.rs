@@ -7,7 +7,9 @@ use std::process::ExitCode;
 
 use clap::{Parser, Subcommand};
 use externalize_core::bundle::{Claim, Verified};
-use externalize_core::xdr::{ReadXdr, ScpHistoryEntry, ScpQuorumSet, ScpStatementPledges};
+use externalize_core::xdr::{
+    ContractEvent, ContractEventBody, ReadXdr, ScpHistoryEntry, ScpQuorumSet, ScpStatementPledges,
+};
 use externalize_core::{Bundle, Network, TrustSet, archive, quorum};
 use serde_json::json;
 
@@ -37,6 +39,9 @@ enum Command {
         /// Print a machine-readable result.
         #[arg(long)]
         json: bool,
+        /// Also print every proven contract event, decoded.
+        #[arg(long)]
+        events: bool,
     },
     /// Certify every ledger in a history archive checkpoint, from its `ledger-*` and `scp-*` files.
     Certify {
@@ -92,7 +97,7 @@ fn main() -> ExitCode {
 
 fn run(cli: Cli) -> Result<ExitCode, String> {
     match cli.command {
-        Command::Verify { bundle, trust, json } => verify(&bundle, trust.as_deref(), json),
+        Command::Verify { bundle, trust, json, events } => verify(&bundle, trust.as_deref(), json, events),
         Command::Certify { ledger, scp, trust, network } => certify(&ledger, &scp, trust.as_deref(), &network),
         Command::Trust(TrustCommand::Show { file, network }) => {
             print!("{}", describe(&load_trust(file.as_deref(), &network)?));
@@ -127,7 +132,7 @@ fn load_trust(path: Option<&Path>, network: &str) -> Result<TrustSet, String> {
     TrustSet::from_toml(&text).map_err(|e| e.to_string())
 }
 
-fn verify(bundle: &Path, trust: Option<&Path>, as_json: bool) -> Result<ExitCode, String> {
+fn verify(bundle: &Path, trust: Option<&Path>, as_json: bool, events: bool) -> Result<ExitCode, String> {
     let outcome = match Bundle::from_json(&read_input(bundle)?) {
         Ok(b) => {
             let trust = load_trust(trust, &b.network)?;
@@ -136,8 +141,8 @@ fn verify(bundle: &Path, trust: Option<&Path>, as_json: bool) -> Result<ExitCode
         Err(e) => Err(e),
     };
     match (&outcome, as_json) {
-        (Ok((v, t)), true) => println!("{}", report_json(v, t)),
-        (Ok((v, t)), false) => print!("{}", report_text(v, t)),
+        (Ok((v, t)), true) => println!("{}", report_json(v, t, events)),
+        (Ok((v, t)), false) => print!("{}", report_text(v, t, events)),
         (Err(e), true) => println!("{}", json!({ "verified": false, "error": e.to_string() })),
         (Err(e), false) => eprintln!("REJECTED  {e}"),
     }
@@ -148,7 +153,18 @@ fn short(h: &[u8; 32]) -> String {
     hex::encode(h.get(..6).unwrap_or_default())
 }
 
-fn report_text(v: &Verified, trust: &TrustSet) -> String {
+/// One proven contract event as JSON: contract, topics and data.
+fn event_json(e: &ContractEvent) -> serde_json::Value {
+    let ContractEventBody::V0(body) = &e.body;
+    json!({
+        "contract": e.contract_id.as_ref().map(ToString::to_string),
+        "topics": body.topics.iter().map(|t| serde_json::to_value(t).unwrap_or_default()).collect::<Vec<_>>(),
+        "data": serde_json::to_value(&body.data).unwrap_or_default(),
+    })
+}
+
+#[allow(clippy::indexing_slicing, reason = "reading serde_json::Value by key yields Null, never panics")]
+fn report_text(v: &Verified, trust: &TrustSet, show_events: bool) -> String {
     let l = &v.ledger;
     let orgs = trust.org_report(l.signers());
     let agreed: Vec<&str> = orgs.iter().filter(|o| o.satisfied).map(|o| o.name.as_str()).collect();
@@ -166,18 +182,34 @@ fn report_text(v: &Verified, trust: &TrustSet) -> String {
         let status = if *succeeded { "succeeded" } else { "applied, failed" };
         let _ = match claim {
             Claim::Transaction { tx_hash } => writeln!(out, "  tx        {}…  {status}", short(&tx_hash.0)),
-            Claim::Invocation { tx_hash, op_index, events, .. } => writeln!(
-                out,
-                "  call      {}… op {op_index}  return value and {} event(s) proven",
-                short(&tx_hash.0),
-                events.len()
-            ),
+            Claim::Invocation { tx_hash, op_index, events, .. } => {
+                let r = writeln!(
+                    out,
+                    "  call      {}… op {op_index}  return value and {} event(s) proven",
+                    short(&tx_hash.0),
+                    events.len()
+                );
+                if show_events {
+                    for e in events {
+                        let j = event_json(&e.0);
+                        let _ = writeln!(
+                            out,
+                            "    event   {}  {}  {}",
+                            j["contract"].as_str().unwrap_or("-"),
+                            j["topics"],
+                            j["data"]
+                        );
+                    }
+                }
+                r
+            }
         };
     }
     out
 }
 
-fn report_json(v: &Verified, trust: &TrustSet) -> serde_json::Value {
+#[allow(clippy::indexing_slicing, reason = "writing a key into a serde_json object never panics")]
+fn report_json(v: &Verified, trust: &TrustSet, show_events: bool) -> serde_json::Value {
     let l = &v.ledger;
     let orgs: Vec<_> = trust
         .org_report(l.signers())
@@ -191,10 +223,16 @@ fn report_json(v: &Verified, trust: &TrustSet) -> serde_json::Value {
             Claim::Transaction { tx_hash } => {
                 json!({ "kind": "transaction", "tx_hash": tx_hash.to_string(), "succeeded": succeeded })
             }
-            Claim::Invocation { tx_hash, op_index, events, .. } => json!({
-                "kind": "invocation", "tx_hash": tx_hash.to_string(), "op_index": op_index,
-                "events": events.len(), "succeeded": succeeded,
-            }),
+            Claim::Invocation { tx_hash, op_index, events, .. } => {
+                let mut c = json!({
+                    "kind": "invocation", "tx_hash": tx_hash.to_string(), "op_index": op_index,
+                    "events": events.len(), "succeeded": succeeded,
+                });
+                if show_events {
+                    c["decoded_events"] = events.iter().map(|e| event_json(&e.0)).collect();
+                }
+                c
+            }
         })
         .collect();
     json!({

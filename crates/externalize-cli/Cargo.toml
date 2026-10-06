@@ -18,6 +18,7 @@ path = "src/main.rs"
 
 [dependencies]
 externalize-core.workspace = true
+stellar-xdr = { workspace = true, features = ["serde_json"] }
 clap.workspace = true
 serde_json.workspace = true
 hex.workspace = true

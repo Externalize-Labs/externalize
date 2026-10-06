@@ -116,3 +116,14 @@ fn testnet_has_a_built_in_trust_set() {
 fn mainnet_signatures_do_not_certify_testnet_trust() {
     cli().args(["certify", "--network", "testnet", "--ledger", LEDGER, "--scp", SCP]).assert().code(1);
 }
+
+#[test]
+fn proven_events_can_be_decoded() {
+    let out = stdout(cli().args(["verify", "--events", BUNDLE]));
+    assert_eq!(out.lines().filter(|l| l.trim_start().starts_with("event")).count(), 4, "{out}");
+    let v: serde_json::Value =
+        serde_json::from_str(&stdout(cli().args(["verify", "--json", "--events", BUNDLE]))).unwrap();
+    let events = v["claims"][1]["decoded_events"].as_array().unwrap();
+    assert_eq!(events.len(), 4);
+    assert!(events[0]["contract"].as_str().unwrap().starts_with('C'));
+}
