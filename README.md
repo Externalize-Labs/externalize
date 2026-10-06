@@ -92,7 +92,9 @@ in a browser wallet. The lower-level API (`Certificate`, `inclusion`,
 ```
 
 The full argument, including what you still have to trust, is in
-[docs/trust-model.md](docs/trust-model.md).
+[docs/trust-model.md](docs/trust-model.md). The wire format, for anyone
+producing or verifying bundles in another language, is specified in
+[docs/bundle-format.md](docs/bundle-format.md).
 
 ## Repository layout
 
