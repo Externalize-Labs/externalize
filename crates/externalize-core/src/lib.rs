@@ -30,6 +30,8 @@ mod error;
 pub mod inclusion;
 mod network;
 pub mod quorum;
+#[cfg(feature = "report")]
+pub mod report;
 pub mod scp;
 mod trust;
 

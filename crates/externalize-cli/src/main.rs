@@ -7,14 +7,8 @@ use std::process::ExitCode;
 
 use clap::{Parser, Subcommand};
 use externalize_core::bundle::{Claim, Verified};
-use externalize_core::xdr::{
-    ContractEvent, ContractEventBody, ReadXdr, ScpHistoryEntry, ScpQuorumSet, ScpStatementPledges,
-};
-use externalize_core::{Bundle, Network, TrustSet, archive, quorum};
-use serde_json::json;
-
-const PUBLIC_TRUST: &str = include_str!("../../../trust/public.toml");
-const TESTNET_TRUST: &str = include_str!("../../../trust/testnet.toml");
+use externalize_core::xdr::{ReadXdr, ScpHistoryEntry, ScpQuorumSet, ScpStatementPledges};
+use externalize_core::{Bundle, Network, TrustSet, archive, quorum, report};
 
 #[derive(Parser)]
 #[command(
@@ -140,11 +134,12 @@ fn read_input(path: &Path) -> Result<String, String> {
 fn load_trust(path: Option<&Path>, network: &str) -> Result<TrustSet, String> {
     let text = match path {
         Some(p) => read_input(p)?,
-        None => match Network::from_name(network).passphrase() {
-            Network::PUBLIC => PUBLIC_TRUST.to_owned(),
-            Network::TESTNET => TESTNET_TRUST.to_owned(),
-            other => return Err(format!("no built-in trust set for {other:?}; pass --trust")),
-        },
+        None => {
+            let passphrase = Network::from_name(network).passphrase().to_owned();
+            return TrustSet::builtin(&passphrase)
+                .ok_or_else(|| format!("no built-in trust set for {passphrase:?}; pass --trust"))?
+                .map_err(|e| e.to_string());
+        }
     };
     TrustSet::from_toml(&text).map_err(|e| e.to_string())
 }
@@ -158,9 +153,9 @@ fn verify(bundle: &Path, trust: Option<&Path>, as_json: bool, events: bool) -> R
         Err(e) => Err(e),
     };
     match (&outcome, as_json) {
-        (Ok((v, t)), true) => println!("{}", report_json(v, t, events)),
+        (Ok((v, t)), true) => println!("{}", report::verified(v, t, events)),
         (Ok((v, t)), false) => print!("{}", report_text(v, t, events)),
-        (Err(e), true) => println!("{}", json!({ "verified": false, "error": e.to_string() })),
+        (Err(e), true) => println!("{}", report::rejected(e)),
         (Err(e), false) => eprintln!("REJECTED  {e}"),
     }
     Ok(if outcome.is_ok() { ExitCode::SUCCESS } else { ExitCode::from(1) })
@@ -218,16 +213,6 @@ fn inspect(b: &Bundle) -> String {
     out
 }
 
-/// One proven contract event as JSON: contract, topics and data.
-fn event_json(e: &ContractEvent) -> serde_json::Value {
-    let ContractEventBody::V0(body) = &e.body;
-    json!({
-        "contract": e.contract_id.as_ref().map(ToString::to_string),
-        "topics": body.topics.iter().map(|t| serde_json::to_value(t).unwrap_or_default()).collect::<Vec<_>>(),
-        "data": serde_json::to_value(&body.data).unwrap_or_default(),
-    })
-}
-
 #[allow(clippy::indexing_slicing, reason = "reading serde_json::Value by key yields Null, never panics")]
 fn report_text(v: &Verified, trust: &TrustSet, show_events: bool) -> String {
     let l = &v.ledger;
@@ -256,7 +241,7 @@ fn report_text(v: &Verified, trust: &TrustSet, show_events: bool) -> String {
                 );
                 if show_events {
                     for e in events {
-                        let j = event_json(&e.0);
+                        let j = report::event(&e.0);
                         let _ = writeln!(
                             out,
                             "    event   {}  {}  {}",
@@ -271,46 +256,6 @@ fn report_text(v: &Verified, trust: &TrustSet, show_events: bool) -> String {
         };
     }
     out
-}
-
-#[allow(clippy::indexing_slicing, reason = "writing a key into a serde_json object never panics")]
-fn report_json(v: &Verified, trust: &TrustSet, show_events: bool) -> serde_json::Value {
-    let l = &v.ledger;
-    let orgs: Vec<_> = trust
-        .org_report(l.signers())
-        .into_iter()
-        .map(|o| json!({ "name": o.name, "signed": o.signed, "validators": o.validators, "satisfied": o.satisfied }))
-        .collect();
-    let claims: Vec<_> = v
-        .claims
-        .iter()
-        .map(|(claim, succeeded)| match claim {
-            Claim::Transaction { tx_hash } => {
-                json!({ "kind": "transaction", "tx_hash": tx_hash.to_string(), "succeeded": succeeded })
-            }
-            Claim::Invocation { tx_hash, op_index, events, .. } => {
-                let mut c = json!({
-                    "kind": "invocation", "tx_hash": tx_hash.to_string(), "op_index": op_index,
-                    "events": events.len(), "succeeded": succeeded,
-                });
-                if show_events {
-                    c["decoded_events"] = events.iter().map(|e| event_json(&e.0)).collect();
-                }
-                c
-            }
-        })
-        .collect();
-    json!({
-        "verified": true,
-        "ledger": {
-            "sequence": l.sequence(),
-            "hash": hex::encode(l.hash()),
-            "close_time": l.close_time(),
-            "signers": l.signers().iter().map(ToString::to_string).collect::<Vec<_>>(),
-            "orgs": orgs,
-        },
-        "claims": claims,
-    })
 }
 
 fn describe(t: &TrustSet) -> String {

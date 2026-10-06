@@ -155,12 +155,37 @@ mod file {
     }
 }
 
+/// Built-in trust sets: the public network's tier-1 and SDF's testnet
+/// validators, derived from archived SCP data (see `trust/` in the repository).
+#[cfg(feature = "config")]
+impl TrustSet {
+    /// The built-in trust set for a network passphrase, if there is one.
+    pub fn builtin(passphrase: &str) -> Option<Result<Self, Error>> {
+        let text = match passphrase {
+            Network::PUBLIC => include_str!("../../../trust/public.toml"),
+            Network::TESTNET => include_str!("../../../trust/testnet.toml"),
+            _ => return None,
+        };
+        Some(Self::from_toml(text))
+    }
+}
+
 #[cfg(all(test, feature = "config"))]
 #[allow(clippy::indexing_slicing)]
 mod tests {
     use super::*;
 
     const PUBLIC: &str = include_str!("../../../trust/public.toml");
+
+    #[test]
+    fn builtin_trust_sets_cover_public_and_testnet() {
+        for (passphrase, orgs) in [(Network::PUBLIC, 10), (Network::TESTNET, 1)] {
+            let t = TrustSet::builtin(passphrase).and_then(Result::ok).unwrap_or_else(|| unreachable!("{passphrase}"));
+            assert_eq!(t.network().passphrase(), passphrase);
+            assert_eq!(t.quorum().inner_sets.len(), orgs);
+        }
+        assert!(TrustSet::builtin("Standalone Network ; February 2017").is_none());
+    }
 
     #[test]
     fn shipped_public_trust_set_parses() {

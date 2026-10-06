@@ -20,6 +20,8 @@ bundle = ["dep:serde", "dep:serde_json", "dep:hex"]
 config = ["dep:serde", "dep:toml"]
 # Reading history archive files (`archive`).
 archive = ["bundle", "dep:flate2"]
+# The shared JSON verification report (`report`), with decoded events.
+report = ["bundle", "config", "stellar-xdr/serde_json"]
 
 [dependencies]
 stellar-xdr.workspace = true
