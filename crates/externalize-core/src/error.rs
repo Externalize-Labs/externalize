@@ -112,6 +112,15 @@ pub enum Error {
     #[error("bundle is missing {0}")]
     MissingData(&'static str),
 
+    /// The input exceeds a size limit.
+    #[error("too many {what} (limit {limit})")]
+    TooLarge {
+        /// What was counted.
+        what: &'static str,
+        /// The limit.
+        limit: usize,
+    },
+
     /// The bundle or trust file is not valid JSON/TOML or has an unknown format tag.
     #[error("invalid {what}: {reason}")]
     Format {

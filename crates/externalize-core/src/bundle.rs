@@ -19,6 +19,12 @@ use crate::{Error, TrustSet};
 /// Format tag every bundle carries.
 pub const FORMAT: &str = "externalize/bundle/v1";
 
+/// Most claims one bundle may carry.
+pub const MAX_CLAIMS: usize = 256;
+
+/// Most events one invocation claim may carry.
+pub const MAX_EVENTS: usize = 10_000;
+
 /// Upper bounds applied when decoding untrusted XDR.
 pub const DECODE_LIMITS: Limits = Limits { depth: 512, len: 64 * 1024 * 1024 };
 
@@ -85,6 +91,7 @@ impl Bundle {
         if b.format != FORMAT {
             return Err(Error::Format { what: "bundle", reason: format!("unknown format {:?}", b.format) });
         }
+        b.check_limits()?;
         Ok(b)
     }
 
@@ -93,8 +100,23 @@ impl Bundle {
         serde_json::to_string_pretty(self).map_err(|e| Error::Format { what: "bundle", reason: e.to_string() })
     }
 
+    fn check_limits(&self) -> Result<(), Error> {
+        if self.claims.len() > MAX_CLAIMS {
+            return Err(Error::TooLarge { what: "claims", limit: MAX_CLAIMS });
+        }
+        for c in &self.claims {
+            if let Claim::Invocation { events, .. } = c
+                && events.len() > MAX_EVENTS
+            {
+                return Err(Error::TooLarge { what: "events in one claim", limit: MAX_EVENTS });
+            }
+        }
+        Ok(())
+    }
+
     /// Certifies the ledger and proves every claim. Any failure rejects the whole bundle.
     pub fn verify(&self, trust: &TrustSet) -> Result<Verified, Error> {
+        self.check_limits()?;
         if self.network != trust.network().passphrase() {
             return Err(Error::NetworkMismatch {
                 expected: trust.network().passphrase().to_owned(),

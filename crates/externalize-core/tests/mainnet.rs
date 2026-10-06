@@ -312,3 +312,12 @@ fn sha(b: &[u8]) -> [u8; 32] {
     use sha2::Digest;
     sha2::Sha256::digest(b).into()
 }
+
+#[test]
+fn oversized_bundles_are_refused_before_any_work() {
+    let mut b = bundle();
+    let claim = b.claims[0].clone();
+    b.claims = vec![claim; externalize_core::bundle::MAX_CLAIMS + 1];
+    assert!(matches!(b.verify(&trust()), Err(Error::TooLarge { what: "claims", .. })));
+    assert!(matches!(Bundle::from_json(&b.to_json().unwrap()), Err(Error::TooLarge { .. })));
+}
