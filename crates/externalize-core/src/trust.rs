@@ -48,10 +48,42 @@ impl TrustSet {
         self.members.contains(node)
     }
 
+    /// How each org (inner quorum set) fared, given the validators that signed.
+    pub fn org_report(&self, signers: &[stellar_xdr::NodeId]) -> Vec<OrgReport> {
+        let signed: BTreeSet<NodeKey> = signers.iter().map(quorum::node_key).collect();
+        self.quorum
+            .inner_sets
+            .iter()
+            .enumerate()
+            .map(|(i, org)| {
+                let count = org.validators.iter().filter(|v| signed.contains(&quorum::node_key(v))).count();
+                OrgReport {
+                    name: self.org_name(i).map_or_else(|| format!("org {}", i.saturating_add(1)), str::to_owned),
+                    signed: count,
+                    validators: org.validators.len(),
+                    satisfied: quorum::is_satisfied(org, &signed),
+                }
+            })
+            .collect()
+    }
+
     /// Whether `signers` satisfies the trust set.
     pub fn is_satisfied_by(&self, signers: &BTreeSet<NodeKey>) -> bool {
         quorum::is_satisfied(&self.quorum, signers)
     }
+}
+
+/// One org's part in certifying a ledger.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct OrgReport {
+    /// Org name from the trust file, or `org N`.
+    pub name: String,
+    /// Validators of the org that signed.
+    pub signed: usize,
+    /// Validators the org has.
+    pub validators: usize,
+    /// Whether the org's own threshold was met.
+    pub satisfied: bool,
 }
 
 #[cfg(feature = "config")]
@@ -124,6 +156,7 @@ mod file {
 }
 
 #[cfg(all(test, feature = "config"))]
+#[allow(clippy::indexing_slicing)]
 mod tests {
     use super::*;
 
@@ -136,6 +169,10 @@ mod tests {
         assert_eq!(t.quorum().inner_sets.len(), 10);
         assert_eq!(t.members.len(), 30);
         assert_eq!(t.org_name(1), Some("Stellar Development Foundation"));
+        let sdf = t.quorum().inner_sets[1].validators.to_vec();
+        let report = t.org_report(&sdf[..2]);
+        assert!(report[1].satisfied && report[1].signed == 2);
+        assert!(report.iter().enumerate().all(|(i, r)| i == 1 || (!r.satisfied && r.signed == 0)));
     }
 
     #[test]

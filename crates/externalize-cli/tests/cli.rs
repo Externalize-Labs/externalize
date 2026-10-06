@@ -23,6 +23,7 @@ fn verifies_a_mainnet_bundle() {
     assert!(out.contains("VERIFIED  ledger 64791359"), "{out}");
     assert!(out.contains("closed    2026-10-05T"), "{out}");
     assert!(out.contains("4 event(s) proven"), "{out}");
+    assert!(out.contains("orgs      10 of 10: Blockdaemon, Stellar Development Foundation"), "{out}");
 }
 
 #[test]
@@ -32,6 +33,8 @@ fn json_output_is_machine_readable() {
     assert_eq!(v["verified"], true);
     assert_eq!(v["ledger"]["sequence"], 64_791_359);
     assert_eq!(v["ledger"]["signers"].as_array().unwrap().len(), 30);
+    assert_eq!(v["ledger"]["orgs"].as_array().unwrap().len(), 10);
+    assert_eq!(v["ledger"]["orgs"][4]["name"], "MoneyGram");
 }
 
 #[test]

@@ -131,13 +131,13 @@ fn verify(bundle: &Path, trust: Option<&Path>, as_json: bool) -> Result<ExitCode
     let outcome = match Bundle::from_json(&read_input(bundle)?) {
         Ok(b) => {
             let trust = load_trust(trust, &b.network)?;
-            b.verify(&trust)
+            b.verify(&trust).map(|v| (v, trust))
         }
         Err(e) => Err(e),
     };
     match (&outcome, as_json) {
-        (Ok(v), true) => println!("{}", report_json(v)),
-        (Ok(v), false) => print!("{}", report_text(v)),
+        (Ok((v, t)), true) => println!("{}", report_json(v, t)),
+        (Ok((v, t)), false) => print!("{}", report_text(v, t)),
         (Err(e), true) => println!("{}", json!({ "verified": false, "error": e.to_string() })),
         (Err(e), false) => eprintln!("REJECTED  {e}"),
     }
@@ -148,8 +148,10 @@ fn short(h: &[u8; 32]) -> String {
     hex::encode(h.get(..6).unwrap_or_default())
 }
 
-fn report_text(v: &Verified) -> String {
+fn report_text(v: &Verified, trust: &TrustSet) -> String {
     let l = &v.ledger;
+    let orgs = trust.org_report(l.signers());
+    let agreed: Vec<&str> = orgs.iter().filter(|o| o.satisfied).map(|o| o.name.as_str()).collect();
     let mut out = format!(
         "VERIFIED  ledger {}\n  hash      {}\n  closed    {}\n  signers   {} trusted validators\n",
         l.sequence(),
@@ -157,6 +159,9 @@ fn report_text(v: &Verified) -> String {
         utc(l.close_time()),
         l.signers().len()
     );
+    if !orgs.is_empty() {
+        let _ = writeln!(out, "  orgs      {} of {}: {}", agreed.len(), orgs.len(), agreed.join(", "));
+    }
     for (claim, succeeded) in &v.claims {
         let status = if *succeeded { "succeeded" } else { "applied, failed" };
         let _ = match claim {
@@ -172,8 +177,13 @@ fn report_text(v: &Verified) -> String {
     out
 }
 
-fn report_json(v: &Verified) -> serde_json::Value {
+fn report_json(v: &Verified, trust: &TrustSet) -> serde_json::Value {
     let l = &v.ledger;
+    let orgs: Vec<_> = trust
+        .org_report(l.signers())
+        .into_iter()
+        .map(|o| json!({ "name": o.name, "signed": o.signed, "validators": o.validators, "satisfied": o.satisfied }))
+        .collect();
     let claims: Vec<_> = v
         .claims
         .iter()
@@ -194,6 +204,7 @@ fn report_json(v: &Verified) -> serde_json::Value {
             "hash": hex::encode(l.hash()),
             "close_time": l.close_time(),
             "signers": l.signers().iter().map(ToString::to_string).collect::<Vec<_>>(),
+            "orgs": orgs,
         },
         "claims": claims,
     })

@@ -38,7 +38,7 @@ pub use bundle::Bundle;
 pub use certificate::{Certificate, CertifiedLedger, verify_ancestors};
 pub use error::Error;
 pub use network::Network;
-pub use trust::TrustSet;
+pub use trust::{OrgReport, TrustSet};
 
 /// The XDR crate this library is built against.
 pub use stellar_xdr as xdr;
