@@ -35,8 +35,28 @@ jobs:
           name: ${{ matrix.target }}
           path: externalize-*.*
 
+  wasm:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: cargo build -p externalize-wasm --target wasm32-unknown-unknown --profile wasm --locked
+      - name: Package for browsers and Node
+        run: |
+          version=$(cargo metadata --format-version 1 --locked | jq -r '.packages[] | select(.name == "wasm-bindgen") | .version')
+          cargo install wasm-bindgen-cli --version "$version" --locked
+          for target in web nodejs; do
+            name=externalize-wasm-${GITHUB_REF_NAME}-${target}
+            wasm-bindgen --target "$target" --out-dir "$name" target/wasm32-unknown-unknown/wasm/externalize_wasm.wasm
+            cp LICENSE "$name/"
+            tar czf "$name.tar.gz" "$name"
+          done
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wasm
+          path: externalize-wasm-*.tar.gz
+
   publish:
-    needs: build
+    needs: [build, wasm]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v4
