@@ -13,11 +13,13 @@ homepage.workspace = true
 authors.workspace = true
 
 [features]
-default = ["bundle", "config"]
+default = ["bundle", "config", "archive"]
 # JSON proof bundles (`Bundle`).
 bundle = ["dep:serde", "dep:serde_json", "dep:hex"]
 # TOML trust-set files (`TrustSet::from_toml`).
 config = ["dep:serde", "dep:toml"]
+# Reading history archive files (`archive`).
+archive = ["bundle", "dep:flate2"]
 
 [dependencies]
 stellar-xdr.workspace = true
@@ -28,6 +30,7 @@ serde = { workspace = true, optional = true }
 serde_json = { workspace = true, optional = true }
 toml = { workspace = true, optional = true }
 hex = { workspace = true, optional = true }
+flate2 = { workspace = true, optional = true }
 
 [dev-dependencies]
 flate2.workspace = true

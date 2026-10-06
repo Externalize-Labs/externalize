@@ -6,6 +6,7 @@
 
 use std::io::Read;
 
+use externalize_core::archive;
 use externalize_core::bundle::{Claim, Hex32, Xdr};
 use externalize_core::inclusion::{self, Invocation};
 use externalize_core::xdr::*;
@@ -28,22 +29,13 @@ fn gunzip(name: &str) -> Vec<u8> {
 }
 
 fn frames<T: ReadXdr>(name: &str) -> Vec<T> {
-    let bytes = gunzip(name);
-    let mut r = Limited::new(bytes.as_slice(), Limits::none());
-    Frame::<T>::read_xdr_iter(&mut r).map(|f| f.unwrap().0).collect()
+    archive::read_gz_frames(std::fs::File::open(format!("{DIR}/{name}")).unwrap()).unwrap()
 }
 
 fn certificates() -> Vec<Certificate> {
     let headers: Vec<LedgerHeaderHistoryEntry> = frames("ledger-03dca33f.xdr.gz");
     let scp: Vec<ScpHistoryEntry> = frames("scp-03dca33f.xdr.gz");
-    headers
-        .into_iter()
-        .map(|header| {
-            let seq = header.header.ledger_seq;
-            let scp = scp.iter().find(|ScpHistoryEntry::V0(e)| e.ledger_messages.ledger_seq == seq).unwrap().clone();
-            Certificate { header, scp }
-        })
-        .collect()
+    archive::certificates(headers, &scp)
 }
 
 fn last() -> Certificate {

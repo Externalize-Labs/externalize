@@ -21,6 +21,8 @@
 //! # Ok::<(), Box<dyn std::error::Error>>(())
 //! ```
 
+#[cfg(feature = "archive")]
+pub mod archive;
 #[cfg(feature = "bundle")]
 pub mod bundle;
 pub mod certificate;
