@@ -1,0 +1,25 @@
+[package]
+name = "externalize-wasm"
+description = "Verify Stellar proof bundles in the browser: the Externalize verifier compiled to WebAssembly."
+keywords = ["stellar", "soroban", "light-client", "wasm", "wallet"]
+categories = ["wasm", "cryptography::cryptocurrencies"]
+readme = "../../README.md"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+authors.workspace = true
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+externalize-core = { path = "../externalize-core", version = "0.1.0", default-features = false, features = ["report"] }
+serde_json.workspace = true
+wasm-bindgen = "0.2"
+js-sys = "0.3"
+
+[lints]
+workspace = true

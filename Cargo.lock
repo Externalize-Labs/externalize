@@ -594,6 +594,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "externalize-wasm"
+version = "0.1.0"
+dependencies = [
+ "externalize-core",
+ "js-sys",
+ "serde_json",
+ "wasm-bindgen",
+]
+
+[[package]]
 name = "fastrand"
 version = "2.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
