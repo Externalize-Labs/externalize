@@ -1,0 +1,31 @@
+[package]
+name = "externalize-cli"
+description = "Command-line verifier for Externalize proof bundles."
+keywords = ["stellar", "soroban", "scp", "light-client", "cli"]
+categories = ["command-line-utilities", "cryptography::cryptocurrencies"]
+readme = "../../README.md"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+authors.workspace = true
+
+[[bin]]
+name = "externalize"
+path = "src/main.rs"
+
+[dependencies]
+externalize-core.workspace = true
+clap.workspace = true
+serde_json.workspace = true
+flate2.workspace = true
+hex.workspace = true
+
+[dev-dependencies]
+assert_cmd = "2"
+serde_json.workspace = true
+
+[lints]
+workspace = true
