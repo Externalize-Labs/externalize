@@ -42,6 +42,12 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - run: cargo build -p externalize-core --target wasm32-unknown-unknown --release --locked
 
+  deny:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: EmbarkStudios/cargo-deny-action@v2
+
   msrv:
     runs-on: ubuntu-latest
     steps:
