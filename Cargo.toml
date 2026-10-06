@@ -43,3 +43,12 @@ codegen-units = 1
 # Signature verification dominates test time; optimize dependencies in dev builds.
 [profile.dev.package."*"]
 opt-level = 3
+
+# Browser builds of externalize-wasm: size over speed.
+[profile.wasm]
+inherits = "release"
+opt-level = "z"
+lto = true
+codegen-units = 1
+strip = true
+panic = "abort"
