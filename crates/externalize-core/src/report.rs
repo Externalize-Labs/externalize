@@ -72,3 +72,40 @@ pub fn event(e: &ContractEvent) -> Value {
         "data": serde_json::to_value(&body.data).unwrap_or_default(),
     })
 }
+
+/// What a bundle claims, **without verifying any of it**: for showing a
+/// bundle before (or instead of) checking it. Always `"verified": false`.
+pub fn inspect(b: &crate::Bundle) -> Value {
+    let h = &b.ledger.0.header;
+    let stellar_xdr::ScpHistoryEntry::V0(scp) = &b.scp.0;
+    let externalizing = scp
+        .ledger_messages
+        .messages
+        .iter()
+        .filter(|m| matches!(m.statement.pledges, stellar_xdr::ScpStatementPledges::Externalize(_)))
+        .count();
+    let claims: Vec<_> = b
+        .claims
+        .iter()
+        .map(|c| match c {
+            Claim::Transaction { tx_hash } => json!({ "kind": "transaction", "tx_hash": tx_hash.to_string() }),
+            Claim::Invocation { tx_hash, op_index, events, .. } => json!({
+                "kind": "invocation", "tx_hash": tx_hash.to_string(), "op_index": op_index, "events": events.len(),
+            }),
+        })
+        .collect();
+    json!({
+        "verified": false,
+        "network": b.network,
+        "ledger": {
+            "sequence": h.ledger_seq,
+            "close_time": h.scp_value.close_time.0,
+            "protocol": h.ledger_version,
+        },
+        "scp_envelopes": scp.ledger_messages.messages.len(),
+        "externalize_envelopes": externalizing,
+        "results": b.results.as_ref().map(|r| r.0.tx_result_set.results.len()),
+        "transactions_included": b.transactions.is_some(),
+        "claims": claims,
+    })
+}

@@ -26,6 +26,19 @@ pub fn verify(bundle_json: &str, trust_toml: Option<String>, events: Option<bool
     js_sys::JSON::parse(&report).unwrap_or(JsValue::NULL)
 }
 
+/// What a bundle claims, without verifying anything (`verified` is always
+/// false). Throws if the text is not a bundle at all.
+#[wasm_bindgen]
+pub fn inspect(bundle_json: &str) -> Result<JsValue, JsError> {
+    let text = inspect_to_json(bundle_json).map_err(|e| JsError::new(&e))?;
+    js_sys::JSON::parse(&text).map_err(|_| JsError::new("could not build the inspection"))
+}
+
+/// [`inspect`] as plain Rust, returning JSON text.
+pub fn inspect_to_json(bundle_json: &str) -> Result<String, String> {
+    Bundle::from_json(bundle_json).map(|b| report::inspect(&b).to_string()).map_err(|e| e.to_string())
+}
+
 /// The built-in trust set for a network passphrase, as TOML, if there is one.
 #[wasm_bindgen(js_name = builtinTrust)]
 pub fn builtin_trust(passphrase: &str) -> Option<String> {

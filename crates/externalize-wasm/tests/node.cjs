@@ -29,4 +29,9 @@ const testnet = pkg.builtinTrust("Test SDF Network ; September 2015");
 assert.match(pkg.verify(bundle, testnet).error, /network mismatch/);
 assert.equal(pkg.builtinTrust("Standalone Network ; February 2017"), undefined);
 
+const seen = pkg.inspect(bundle);
+assert.equal(seen.verified, false);
+assert.equal(seen.ledger.sequence, 64791359);
+assert.throws(() => pkg.inspect("{}"));
+
 console.log(`ok: ledger ${report.ledger.sequence} verified from JavaScript`);

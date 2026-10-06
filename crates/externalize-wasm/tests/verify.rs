@@ -2,7 +2,7 @@
 
 #![allow(clippy::unwrap_used, clippy::indexing_slicing, missing_docs)]
 
-use externalize_wasm::verify_to_json;
+use externalize_wasm::{inspect_to_json, verify_to_json};
 use serde_json::Value;
 
 const BUNDLE: &str = include_str!("../../externalize-core/tests/fixtures/mainnet/bundle-64791359.json");
@@ -41,4 +41,14 @@ fn rejections_are_reports_not_errors() {
         assert_eq!(r["verified"], false, "{r}");
         assert!(r["error"].as_str().is_some_and(|e| !e.is_empty()));
     }
+}
+
+#[test]
+fn inspect_describes_without_verifying() {
+    let r: Value = serde_json::from_str(&inspect_to_json(BUNDLE).unwrap()).unwrap();
+    assert_eq!(r["verified"], false, "inspection never claims verification");
+    assert_eq!(r["ledger"]["sequence"], 64_791_359);
+    assert_eq!(r["network"], "Public Global Stellar Network ; September 2015");
+    assert_eq!(r["claims"].as_array().unwrap().len(), 2);
+    assert!(inspect_to_json("{}").is_err());
 }
