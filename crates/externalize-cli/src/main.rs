@@ -43,6 +43,11 @@ enum Command {
         #[arg(long)]
         events: bool,
     },
+    /// Show what a bundle claims, without verifying anything.
+    Inspect {
+        /// Bundle file (`-` for stdin).
+        bundle: PathBuf,
+    },
     /// Certify every ledger in a history archive checkpoint, from its `ledger-*` and `scp-*` files.
     Certify {
         /// `ledger-*.xdr.gz` file.
@@ -98,6 +103,11 @@ fn main() -> ExitCode {
 fn run(cli: Cli) -> Result<ExitCode, String> {
     match cli.command {
         Command::Verify { bundle, trust, json, events } => verify(&bundle, trust.as_deref(), json, events),
+        Command::Inspect { bundle } => {
+            let b = Bundle::from_json(&read_input(&bundle)?).map_err(|e| e.to_string())?;
+            print!("{}", inspect(&b));
+            Ok(ExitCode::SUCCESS)
+        }
         Command::Certify { ledger, scp, trust, network } => certify(&ledger, &scp, trust.as_deref(), &network),
         Command::Trust(TrustCommand::Show { file, network }) => {
             print!("{}", describe(&load_trust(file.as_deref(), &network)?));
@@ -151,6 +161,54 @@ fn verify(bundle: &Path, trust: Option<&Path>, as_json: bool, events: bool) -> R
 
 fn short(h: &[u8; 32]) -> String {
     hex::encode(h.get(..6).unwrap_or_default())
+}
+
+/// Describes a bundle's contents. Nothing here is verified.
+fn inspect(b: &Bundle) -> String {
+    let h = &b.ledger.0.header;
+    let externalize_core::xdr::ScpHistoryEntry::V0(scp) = &b.scp.0;
+    let externalizing = scp
+        .ledger_messages
+        .messages
+        .iter()
+        .filter(|m| matches!(m.statement.pledges, ScpStatementPledges::Externalize(_)))
+        .count();
+    let mut out = format!(
+        "UNVERIFIED bundle for ledger {}
+  network   {}
+  closed    {}
+  protocol  {}
+  scp       {} envelopes ({} externalize)
+",
+        h.ledger_seq,
+        b.network,
+        utc(h.scp_value.close_time.0),
+        h.ledger_version,
+        scp.ledger_messages.messages.len(),
+        externalizing
+    );
+    if let Some(r) = &b.results {
+        let _ = writeln!(out, "  results   {} transactions", r.0.tx_result_set.results.len());
+    }
+    if b.transactions.is_some() {
+        out.push_str(
+            "  txset     included
+",
+        );
+    }
+    for claim in &b.claims {
+        let _ = match claim {
+            Claim::Transaction { tx_hash } => writeln!(out, "  claim     transaction {tx_hash}"),
+            Claim::Invocation { tx_hash, op_index, events, .. } => {
+                writeln!(out, "  claim     invocation {tx_hash} op {op_index}, {} events", events.len())
+            }
+        };
+    }
+    out.push_str(
+        "Run `externalize verify` to check any of this.
+",
+    );
+    out
 }
 
 /// One proven contract event as JSON: contract, topics and data.

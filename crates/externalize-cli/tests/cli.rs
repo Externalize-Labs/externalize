@@ -127,3 +127,13 @@ fn proven_events_can_be_decoded() {
     assert_eq!(events.len(), 4);
     assert!(events[0]["contract"].as_str().unwrap().starts_with('C'));
 }
+
+#[test]
+fn inspect_describes_without_verifying() {
+    let tampered = std::fs::read_to_string(BUNDLE).unwrap().replacen("\"op_index\": 0", "\"op_index\": 1", 1);
+    let out = cli().args(["inspect", "-"]).write_stdin(tampered).output().unwrap();
+    assert!(out.status.success());
+    let s = String::from_utf8(out.stdout).unwrap();
+    assert!(s.starts_with("UNVERIFIED bundle for ledger 64791359"), "{s}");
+    assert!(s.contains("30 envelopes (30 externalize)") && s.contains("op 1, 4 events"), "{s}");
+}
