@@ -67,3 +67,28 @@ fn derived_trust_set_matches_the_shipped_one() {
     };
     assert_eq!(strip(&a), strip(&b), "same thresholds and sizes; only names differ");
 }
+
+const LEDGER: &str =
+    concat!(env!("CARGO_MANIFEST_DIR"), "/../externalize-core/tests/fixtures/mainnet/ledger-03dca33f.xdr.gz");
+
+#[test]
+fn certifies_a_whole_mainnet_checkpoint() {
+    let out = cli().args(["certify", "--ledger", LEDGER, "--scp", SCP]).output().unwrap();
+    assert!(out.status.success());
+    let s = String::from_utf8(out.stdout).unwrap();
+    assert_eq!(s.lines().filter(|l| l.starts_with("VERIFIED")).count(), 64, "{s}");
+}
+
+#[test]
+fn certify_fails_against_the_wrong_trust_set() {
+    let dir = std::env::temp_dir().join("externalize-testnet-trust.toml");
+    std::fs::write(
+        &dir,
+        "network = \"testnet\"
+threshold = 1
+validators = [\"GABMKJM6I25XI4K7U6XWMULOUQIQ27BCTMLS6BYYSOWKTBUXVRJSXHYQ\"]
+",
+    )
+    .unwrap();
+    cli().args(["certify", "--ledger", LEDGER, "--scp", SCP, "--trust", dir.to_str().unwrap()]).assert().code(1);
+}

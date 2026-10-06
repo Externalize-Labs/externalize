@@ -7,8 +7,8 @@ use std::process::ExitCode;
 
 use clap::{Parser, Subcommand};
 use externalize_core::bundle::{Claim, Verified};
-use externalize_core::xdr::{Frame, Limited, Limits, ReadXdr, ScpHistoryEntry, ScpQuorumSet, ScpStatementPledges};
-use externalize_core::{Bundle, Network, TrustSet, quorum};
+use externalize_core::xdr::{ReadXdr, ScpHistoryEntry, ScpQuorumSet, ScpStatementPledges};
+use externalize_core::{Bundle, Network, TrustSet, archive, quorum};
 use serde_json::json;
 
 const PUBLIC_TRUST: &str = include_str!("../../../trust/public.toml");
@@ -36,6 +36,18 @@ enum Command {
         /// Print a machine-readable result.
         #[arg(long)]
         json: bool,
+    },
+    /// Certify every ledger in a history archive checkpoint, from its `ledger-*` and `scp-*` files.
+    Certify {
+        /// `ledger-*.xdr.gz` file.
+        #[arg(long)]
+        ledger: PathBuf,
+        /// `scp-*.xdr.gz` file from the same checkpoint.
+        #[arg(long)]
+        scp: PathBuf,
+        /// Trust set. Defaults to the built-in public-network tier-1.
+        #[arg(long)]
+        trust: Option<PathBuf>,
     },
     /// Inspect or derive trust sets.
     #[command(subcommand)]
@@ -74,6 +86,7 @@ fn main() -> ExitCode {
 fn run(cli: Cli) -> Result<ExitCode, String> {
     match cli.command {
         Command::Verify { bundle, trust, json } => verify(&bundle, trust.as_deref(), json),
+        Command::Certify { ledger, scp, trust } => certify(&ledger, &scp, trust.as_deref()),
         Command::Trust(TrustCommand::Show { file }) => {
             print!("{}", describe(&load_trust(file.as_deref())?));
             Ok(ExitCode::SUCCESS)
@@ -205,12 +218,35 @@ fn utc(secs: u64) -> String {
     format!("{year:04}-{month:02}-{day:02}T{:02}:{:02}:{:02}Z", rem / 3_600, rem % 3_600 / 60, rem % 60)
 }
 
-fn read_scp(path: &Path) -> Result<Vec<ScpHistoryEntry>, String> {
+fn read_gz<T: ReadXdr>(path: &Path) -> Result<Vec<T>, String> {
     let file = std::fs::File::open(path).map_err(|e| format!("reading {}: {e}", path.display()))?;
-    let mut r = Limited::new(flate2::read::GzDecoder::new(file), Limits::none());
-    Frame::<ScpHistoryEntry>::read_xdr_iter(&mut r)
-        .map(|f| f.map(|f| f.0).map_err(|e| format!("decoding {}: {e}", path.display())))
-        .collect()
+    archive::read_gz_frames(file).map_err(|e| format!("decoding {}: {e}", path.display()))
+}
+
+fn read_scp(path: &Path) -> Result<Vec<ScpHistoryEntry>, String> {
+    read_gz(path)
+}
+
+/// Certifies each ledger of a checkpoint. Exit status 1 if any ledger fails.
+fn certify(ledger: &Path, scp: &Path, trust: Option<&Path>) -> Result<ExitCode, String> {
+    let trust = load_trust(trust)?;
+    let certs = archive::certificates(read_gz(ledger)?, &read_scp(scp)?);
+    if certs.is_empty() {
+        return Err("no ledger in the files has SCP messages".into());
+    }
+    let mut failed = 0usize;
+    for cert in &certs {
+        let seq = cert.header.header.ledger_seq;
+        match cert.verify(&trust) {
+            Ok(l) => println!("VERIFIED  ledger {seq}  {}  {} signers", hex::encode(l.hash()), l.signers().len()),
+            Err(e) => {
+                failed = failed.saturating_add(1);
+                println!("REJECTED  ledger {seq}  {e}");
+            }
+        }
+    }
+    eprintln!("{} of {} ledgers certified", certs.len().saturating_sub(failed), certs.len());
+    Ok(if failed == 0 { ExitCode::SUCCESS } else { ExitCode::from(1) })
 }
 
 /// The quorum set referenced by the most EXTERNALIZE statements in the file.
