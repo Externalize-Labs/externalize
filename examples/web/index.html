@@ -1,0 +1,67 @@
+<!doctype html>
+<!--
+  Verify an Externalize proof bundle in the browser. Nothing leaves the page.
+
+  cargo build --profile wasm -p externalize-wasm --target wasm32-unknown-unknown
+  wasm-bindgen --target web --out-dir examples/web/pkg target/wasm32-unknown-unknown/wasm/externalize_wasm.wasm
+  python -m http.server -d examples/web   # then open http://localhost:8000
+-->
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Externalize verifier</title>
+  <style>
+    :root { --bg: #fbfbfa; --fg: #1d1d1b; --muted: #6b6b66; --ok: #1f7a4d; --bad: #b3261e; --line: #e4e4e0; }
+    @media (prefers-color-scheme: dark) {
+      :root { --bg: #151514; --fg: #ececea; --muted: #a0a09a; --ok: #5fd39a; --bad: #ff8a80; --line: #2c2c2a; }
+    }
+    body { margin: 0; background: var(--bg); color: var(--fg); font: 15px/1.5 system-ui, sans-serif; }
+    main { max-width: 720px; margin: 0 auto; padding: 32px 16px; }
+    h1 { font-size: 22px; margin: 0 0 4px; }
+    p { color: var(--muted); margin: 0 0 20px; }
+    label { display: block; border: 2px dashed var(--line); border-radius: 10px; padding: 28px; text-align: center; cursor: pointer; }
+    input { display: none; }
+    #verdict { font-size: 20px; font-weight: 600; margin: 24px 0 8px; }
+    .ok { color: var(--ok); } .bad { color: var(--bad); }
+    dl { display: grid; grid-template-columns: max-content 1fr; gap: 4px 16px; margin: 0; }
+    dt { color: var(--muted); } dd { margin: 0; overflow-wrap: anywhere; font-family: ui-monospace, monospace; font-size: 13px; }
+  </style>
+</head>
+<body>
+<main>
+  <h1>Externalize verifier</h1>
+  <p>Checks a Stellar proof bundle against validator signatures, in this page. No RPC, no server.</p>
+  <label>Drop or choose a bundle (.json)<input id="file" type="file" accept="application/json,.json"></label>
+  <div id="verdict"></div>
+  <dl id="details"></dl>
+</main>
+<script type="module">
+  import init, { verify } from "./pkg/externalize_wasm.js";
+  await init();
+
+  const verdict = document.getElementById("verdict");
+  const details = document.getElementById("details");
+  const row = (k, v) => { details.insertAdjacentHTML("beforeend", "<dt></dt><dd></dd>"); details.lastElementChild.previousElementSibling.textContent = k; details.lastElementChild.textContent = v; };
+
+  async function check(file) {
+    details.replaceChildren();
+    const r = verify(await file.text(), undefined, true);
+    verdict.className = r.verified ? "ok" : "bad";
+    verdict.textContent = r.verified ? "Verified" : "Rejected";
+    if (!r.verified) return row("reason", r.error);
+    const agreed = r.ledger.orgs.filter((o) => o.satisfied).map((o) => o.name);
+    row("ledger", r.ledger.sequence);
+    row("closed", new Date(r.ledger.close_time * 1000).toISOString());
+    row("signed by", `${r.ledger.signers.length} validators; ${agreed.length} of ${r.ledger.orgs.length} orgs: ${agreed.join(", ")}`);
+    for (const c of r.claims) {
+      const what = c.kind === "invocation" ? `contract call, ${c.events} event(s) and return value proven` : "transaction applied";
+      row(c.tx_hash.slice(0, 12) + "…", `${what}${c.succeeded ? "" : " (failed)"}`);
+    }
+  }
+  document.getElementById("file").addEventListener("change", (e) => e.target.files[0] && check(e.target.files[0]));
+  document.body.addEventListener("dragover", (e) => e.preventDefault());
+  document.body.addEventListener("drop", (e) => { e.preventDefault(); e.dataTransfer.files[0] && check(e.dataTransfer.files[0]); });
+</script>
+</body>
+</html>
