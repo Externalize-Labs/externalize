@@ -137,3 +137,10 @@ fn inspect_describes_without_verifying() {
     assert!(s.starts_with("UNVERIFIED bundle for ledger 64791359"), "{s}");
     assert!(s.contains("30 envelopes (30 externalize)") && s.contains("op 1, 4 events"), "{s}");
 }
+
+#[test]
+fn derive_carries_org_names_forward() {
+    let shipped = concat!(env!("CARGO_MANIFEST_DIR"), "/../../trust/public.toml");
+    let out = stdout(cli().args(["trust", "derive", SCP, "--names-from", shipped]));
+    assert!(out.contains("name = \"LOBSTR\"") && !out.contains("org-"), "{out}");
+}

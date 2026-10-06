@@ -87,6 +87,9 @@ enum TrustCommand {
         /// Network the archive belongs to (`public`, `testnet` or a passphrase).
         #[arg(long, default_value = "public")]
         network: String,
+        /// Existing trust file whose org names to reuse for orgs with the same validators.
+        #[arg(long)]
+        names_from: Option<PathBuf>,
     },
 }
 
@@ -113,8 +116,12 @@ fn run(cli: Cli) -> Result<ExitCode, String> {
             print!("{}", describe(&load_trust(file.as_deref(), &network)?));
             Ok(ExitCode::SUCCESS)
         }
-        Command::Trust(TrustCommand::Derive { scp, network }) => {
-            print!("{}", derive(&scp, &Network::from_name(&network))?);
+        Command::Trust(TrustCommand::Derive { scp, network, names_from }) => {
+            let known = match names_from {
+                Some(p) => Some(TrustSet::from_toml(&read_input(&p)?).map_err(|e| e.to_string())?),
+                None => None,
+            };
+            print!("{}", derive(&scp, &Network::from_name(&network), known.as_ref())?);
             Ok(ExitCode::SUCCESS)
         }
     }
@@ -400,7 +407,17 @@ fn dominant_quorum_set(entries: &[ScpHistoryEntry]) -> Result<ScpQuorumSet, Stri
         .ok_or_else(|| "no EXTERNALIZE statement references a quorum set recorded in the file".to_owned())
 }
 
-fn derive(path: &Path, network: &Network) -> Result<String, String> {
+/// The name `known` gives an org with exactly these validators, if any.
+fn known_name(known: Option<&TrustSet>, validators: &[externalize_core::xdr::NodeId]) -> Option<String> {
+    let known = known?;
+    let want: std::collections::BTreeSet<[u8; 32]> = validators.iter().map(quorum::node_key).collect();
+    known.quorum().inner_sets.iter().enumerate().find_map(|(i, org)| {
+        let have: std::collections::BTreeSet<[u8; 32]> = org.validators.iter().map(quorum::node_key).collect();
+        (have == want).then(|| known.org_name(i).map(str::to_owned)).flatten()
+    })
+}
+
+fn derive(path: &Path, network: &Network, known: Option<&TrustSet>) -> Result<String, String> {
     let q = dominant_quorum_set(&read_scp(path)?)?;
     TrustSet::new(network.clone(), q.clone()).map_err(|e| e.to_string())?;
     if q.inner_sets.iter().any(|i| !i.inner_sets.is_empty()) {
@@ -424,8 +441,8 @@ fn derive(path: &Path, network: &Network) -> Result<String, String> {
     for (i, inner) in q.inner_sets.iter().enumerate() {
         let _ = write!(
             out,
-            "\n[[org]]\nname = \"org-{}\"\nthreshold = {}\nvalidators = [\n{}]\n",
-            i.saturating_add(1),
+            "\n[[org]]\nname = \"{}\"\nthreshold = {}\nvalidators = [\n{}]\n",
+            known_name(known, &inner.validators).unwrap_or_else(|| format!("org-{}", i.saturating_add(1))),
             inner.threshold,
             list(&inner.validators)
         );
