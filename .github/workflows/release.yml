@@ -19,7 +19,7 @@ jobs:
           - { os: macos-13, target: x86_64-apple-darwin, ext: "" }
           - { os: windows-latest, target: x86_64-pc-windows-msvc, ext: ".exe" }
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - run: rustup target add ${{ matrix.target }}
       - run: cargo build --locked --release -p externalize-cli --target ${{ matrix.target }}
       - name: Package
@@ -30,7 +30,7 @@ jobs:
           cp target/${{ matrix.target }}/release/externalize${{ matrix.ext }} README.md LICENSE "$name/"
           cp -r trust "$name/"
           if [ "${{ runner.os }}" = "Windows" ]; then 7z a "$name.zip" "$name" >/dev/null; else tar czf "$name.tar.gz" "$name"; fi
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: ${{ matrix.target }}
           path: externalize-*.*
@@ -38,7 +38,7 @@ jobs:
   wasm:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - run: cargo build -p externalize-wasm --target wasm32-unknown-unknown --profile wasm --locked
       - name: Package for browsers and Node
         run: |
@@ -50,7 +50,7 @@ jobs:
             cp LICENSE "$name/"
             tar czf "$name.tar.gz" "$name"
           done
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: wasm
           path: externalize-wasm-*.tar.gz
@@ -59,12 +59,12 @@ jobs:
     needs: [build, wasm]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           merge-multiple: true
       - name: Checksums
         run: sha256sum externalize-* > SHA256SUMS
-      - uses: softprops/action-gh-release@v2
+      - uses: softprops/action-gh-release@v3
         with:
           files: |
             externalize-*
