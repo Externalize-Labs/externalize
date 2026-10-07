@@ -1,0 +1,47 @@
+name: Pages
+
+# The browser verifier: externalize-core compiled to WebAssembly, served from GitHub Pages.
+on:
+  push:
+    branches: [main]
+    paths: ["site/**", "crates/**", "trust/**", "Cargo.*", ".github/workflows/pages.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - run: cargo build -p externalize-wasm --target wasm32-unknown-unknown --profile wasm --locked
+      - name: Generate the JavaScript bindings
+        run: |
+          version=$(cargo metadata --format-version 1 --locked | jq -r '.packages[] | select(.name == "wasm-bindgen") | .version')
+          cargo install wasm-bindgen-cli --version "$version" --locked
+          wasm-bindgen --target web --out-dir site/pkg target/wasm32-unknown-unknown/wasm/externalize_wasm.wasm
+      - name: Add the mainnet sample bundle
+        run: |
+          mkdir -p site/samples
+          cp crates/externalize-core/tests/fixtures/mainnet/bundle-64791359.json site/samples/mainnet-64791359.json
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v4
+        with:
+          path: site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
