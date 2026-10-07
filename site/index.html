@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Externalize verifier</title>
+  <meta name="description" content="Verify Stellar ledgers, transactions and Soroban contract events from the validators' own signatures, in your browser. No RPC, no server.">
+  <link rel="icon" href="logo.svg">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="top">
+  <a class="brand" href="https://github.com/Externalize-Labs" aria-label="Externalize on GitHub">
+    <picture>
+      <source media="(prefers-color-scheme: dark)" srcset="logo-dark.svg">
+      <img src="logo.svg" alt="Externalize" height="36">
+    </picture>
+  </a>
+  <nav>
+    <a href="https://github.com/Externalize-Labs/externalize">Verifier</a>
+    <a href="https://github.com/Externalize-Labs/externalize-node">Bundle node</a>
+    <a href="https://github.com/Externalize-Labs/externalize/blob/main/docs/trust-model.md">Trust model</a>
+  </nav>
+</header>
+
+<main>
+  <section class="intro">
+    <h1>Don't trust the RPC. Check the validators.</h1>
+    <p>A proof bundle carries the signatures Stellar's validators made when they agreed on a ledger,
+      and the hashes that tie that ledger to a transaction or a Soroban contract event. This page checks
+      them against the validators you trust, here in your browser, with nothing sent anywhere.</p>
+    <div class="actions">
+      <button type="button" class="primary" id="sample">Verify a mainnet proof</button>
+      <button type="button" id="tamper">Tamper with it</button>
+      <label class="file">Use your own bundle<input type="file" id="file" accept="application/json,.json"></label>
+    </div>
+    <p class="hint" id="drop-hint">You can also drop a bundle anywhere on this page. Build one for any recent transaction with <a href="https://github.com/Externalize-Labs/externalize-node">exnode</a>.</p>
+  </section>
+
+  <section class="panel" aria-labelledby="result-h" aria-live="polite">
+    <h2 id="result-h" class="sr">Result</h2>
+    <div id="result"><p class="muted" id="status">Loading the verifier…</p></div>
+  </section>
+</main>
+
+<footer>
+  <p>The verifier is <a href="https://github.com/Externalize-Labs/externalize">externalize-core</a> compiled to WebAssembly,
+    the same code as the <code>externalize</code> CLI. It trusts the public network's tier-1 validators (7 of 10 organizations)
+    or SDF's testnet validators, chosen by the bundle's network.</p>
+</footer>
+<script type="module" src="app.js"></script>
+</body>
+</html>

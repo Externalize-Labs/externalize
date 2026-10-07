@@ -1,3 +1,5 @@
 target/
 pkg/
 examples/web/pkg/
+site/pkg/
+site/samples/
