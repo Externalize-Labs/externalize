@@ -56,11 +56,17 @@ each of these to real mainnet data.
 
 ## Quick start
 
-Download a binary from [Releases](https://github.com/Externalize-Labs/externalize/releases), or:
+Download a binary for Linux, macOS or Windows from
+[Releases](https://github.com/Externalize-Labs/externalize/releases) (each
+release lists SHA-256 checksums), or build that release from source:
 
 ```sh
-cargo install --git https://github.com/Externalize-Labs/externalize externalize-cli
+cargo install --git https://github.com/Externalize-Labs/externalize --tag v0.1.1 --locked externalize-cli
 ```
+
+Or try it without installing anything: the
+[online verifier](https://externalize-labs.github.io/externalize/) checks a
+bundle in your browser.
 
 | Command | What it does |
 |---|---|
