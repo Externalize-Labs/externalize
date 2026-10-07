@@ -6,6 +6,8 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-10-07
+
 ### Added
 
 - `externalize-core`: certify ledgers from SCP `EXTERNALIZE` signatures against
@@ -30,4 +32,5 @@ All notable changes to this project are documented here. The format follows
   sets shared by the CLI and the WASM package.
 - `externalize inspect --json`.
 
-[Unreleased]: https://github.com/Externalize-Labs/externalize/commits/main
+[Unreleased]: https://github.com/Externalize-Labs/externalize/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/Externalize-Labs/externalize/releases/tag/v0.1.0
