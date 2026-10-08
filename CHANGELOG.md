@@ -6,6 +6,12 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- A [browser verifier](https://externalize-labs.github.io/externalize/) on
+  GitHub Pages: `externalize-wasm` checks a real mainnet bundle, a tampered
+  copy, or a bundle you bring, with nothing sent to a server.
+
 ## [0.1.1] - 2026-10-07
 
 ### Fixed
