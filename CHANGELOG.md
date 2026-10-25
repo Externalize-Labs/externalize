@@ -11,6 +11,12 @@ All notable changes to this project are documented here. The format follows
 - A [browser verifier](https://externalize-labs.github.io/externalize/) on
   GitHub Pages: `externalize-wasm` checks a real mainnet bundle, a tampered
   copy, or a bundle you bring, with nothing sent to a server.
+- Prove any mainnet transaction from the browser verifier by its hash (or a
+  stellar.expert link). An untrusted exnode builds the bundle and the page
+  verifies it. Recent Soroban calls are proven with their return value and
+  events, and anything older as an applied transaction. Ledgers not yet in the
+  archive are retried until their checkpoint is published. Shareable `#tx=`
+  links, and a download of the proof for offline checks.
 
 ## [0.1.1] - 2026-10-07
 

@@ -64,9 +64,13 @@ release lists SHA-256 checksums), or build that release from source:
 cargo install --git https://github.com/Externalize-Labs/externalize --tag v0.1.1 --locked externalize-cli
 ```
 
-Or try it without installing anything: the
-[online verifier](https://externalize-labs.github.io/externalize/) checks a
-bundle in your browser.
+Or try it without installing anything: paste any mainnet transaction hash into
+the [online verifier](https://externalize-labs.github.io/externalize/). An
+untrusted [exnode](https://github.com/Externalize-Labs/externalize-node) builds
+the proof, and your browser checks it against the validators' signatures.
+Soroban calls from the last seven days (the RPC's retention) are proven with
+their return value and events, and older transactions as applied. Results link
+as `#tx=<hash>`, and the bundle can be downloaded to verify again offline.
 
 | Command | What it does |
 |---|---|
