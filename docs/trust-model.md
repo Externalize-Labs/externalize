@@ -51,6 +51,9 @@ Verification is fail-closed:
 | Contract call's return value and events | `InvokeHostFunctionSuccessPreImage` | the operation's success hash |
 
 A certified ledger vouches for its ancestors, never its descendants.
+`externalize ancestry` uses this: one certified ledger and the archived
+`ledger-*` files between them prove any older ledger, one hash link at a time,
+without that ledger's own SCP messages.
 
 ## What cannot be proven (yet)
 

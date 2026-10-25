@@ -51,7 +51,8 @@ so the CLI's `--json` output and the WASM package stay identical.
 ## Fixtures
 
 `crates/externalize-core/tests/fixtures/mainnet` holds real public-network data:
-one archive checkpoint's headers and SCP messages, one ledger's results and
+one archive checkpoint's headers and SCP messages, the previous checkpoint's
+headers (`ledger-03dca2ff.xdr.gz`, for ancestry tests), one ledger's results and
 transaction set, and two transactions' meta from RPC. `bundle-64791359.json` is
 generated from them:
 

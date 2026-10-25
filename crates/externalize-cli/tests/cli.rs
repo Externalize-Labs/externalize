@@ -9,6 +9,65 @@ const BUNDLE: &str =
 const SCP: &str =
     concat!(env!("CARGO_MANIFEST_DIR"), "/../externalize-core/tests/fixtures/mainnet/scp-03dca33f.xdr.gz");
 
+const HEADERS_NEWER: &str =
+    concat!(env!("CARGO_MANIFEST_DIR"), "/../externalize-core/tests/fixtures/mainnet/ledger-03dca33f.xdr.gz");
+const HEADERS_OLDER: &str =
+    concat!(env!("CARGO_MANIFEST_DIR"), "/../externalize-core/tests/fixtures/mainnet/ledger-03dca2ff.xdr.gz");
+
+#[test]
+fn ancestry_proves_a_ledger_from_the_previous_checkpoint() {
+    let out = stdout(cli().args([
+        "ancestry",
+        "--bundle",
+        BUNDLE,
+        "--headers",
+        HEADERS_NEWER,
+        HEADERS_OLDER,
+        "--ledger",
+        "64791250",
+    ]));
+    assert!(out.contains("VERIFIED  ledger 64791250"), "{out}");
+    assert!(
+        out.contains("via       ledger 64791359, certified by 30 trusted validators (10 orgs agree), 109 links back"),
+        "{out}"
+    );
+}
+
+#[test]
+fn ancestry_json_names_the_certifying_ledger() {
+    let out = cli()
+        .args([
+            "ancestry",
+            "--json",
+            "--bundle",
+            BUNDLE,
+            "--headers",
+            HEADERS_OLDER,
+            HEADERS_NEWER,
+            "--ledger",
+            "64791250",
+        ])
+        .output()
+        .unwrap();
+    let v: serde_json::Value = serde_json::from_slice(&out.stdout).unwrap();
+    assert_eq!(v["verified"], true);
+    assert_eq!(v["ledger"]["sequence"], 64_791_250);
+    assert_eq!(v["via"]["sequence"], 64_791_359);
+    assert_eq!(v["via"]["orgs"].as_array().unwrap().len(), 10);
+    assert_eq!(v["links"], 109);
+}
+
+#[test]
+fn ancestry_without_the_older_file_exits_one_and_says_what_is_missing() {
+    let out = cli()
+        .args(["ancestry", "--bundle", BUNDLE, "--headers", HEADERS_NEWER, "--ledger", "64791250"])
+        .output()
+        .unwrap();
+    assert_eq!(out.status.code(), Some(1));
+    let err = String::from_utf8(out.stderr).unwrap();
+    assert!(err.contains("ledger 64791295: header missing"), "{err}");
+}
+
 fn cli() -> Command {
     Command::cargo_bin("externalize").unwrap()
 }
