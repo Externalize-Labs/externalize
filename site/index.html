@@ -4,7 +4,9 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Externalize verifier</title>
-  <meta name="description" content="Verify Stellar ledgers, transactions and Soroban contract events from the validators' own signatures, in your browser. No RPC, no server.">
+  <meta name="description" content="Prove any Stellar mainnet transaction or Soroban contract call from the validators' own signatures, checked in your browser. No trusted RPC, no trusted server.">
+  <!-- The bundle node the page asks for proofs. It is untrusted: every bundle is verified here. Override with ?node=URL. -->
+  <meta name="exnode" content="https://externalize-node.vercel.app">
   <link rel="icon" href="logo.svg">
   <link rel="stylesheet" href="style.css">
 </head>
@@ -28,13 +30,25 @@
     <h1>Don't trust the RPC. Check the validators.</h1>
     <p>A proof bundle carries the signatures Stellar's validators made when they agreed on a ledger,
       and the hashes that tie that ledger to a transaction or a Soroban contract event. This page checks
-      them against the validators you trust, here in your browser, with nothing sent anywhere.</p>
+      them against the validators you trust, here in your browser.</p>
+    <form class="prove" id="prove" novalidate>
+      <label for="hash">Prove a mainnet transaction</label>
+      <div class="prove-row">
+        <input id="hash" name="hash" autocomplete="off" spellcheck="false" inputmode="text"
+          placeholder="Transaction hash, or a stellar.expert link to one" aria-describedby="hash-help hash-error">
+        <button type="submit" class="primary" id="prove-btn">Prove it</button>
+      </div>
+      <p class="field-error" id="hash-error" role="alert" hidden></p>
+      <p class="hint" id="hash-help">The proof is built by an <a href="https://github.com/Externalize-Labs/externalize-node">exnode</a>
+        bundle node, which is not trusted: everything it sends is checked here against the validators' signatures.
+        Soroban calls from the last 7 days are proven with their return value and events.</p>
+    </form>
     <div class="actions">
-      <button type="button" class="primary" id="sample">Verify a mainnet proof</button>
+      <button type="button" id="sample">Verify a stored mainnet proof</button>
       <button type="button" id="tamper">Tamper with it</button>
       <label class="file">Use your own bundle<input type="file" id="file" accept="application/json,.json"></label>
     </div>
-    <p class="hint" id="drop-hint">You can also drop a bundle anywhere on this page. Build one for any recent transaction with <a href="https://github.com/Externalize-Labs/externalize-node">exnode</a>.</p>
+    <p class="hint" id="drop-hint">You can also drop a bundle anywhere on this page.</p>
   </section>
 
   <section class="panel" aria-labelledby="result-h" aria-live="polite">
