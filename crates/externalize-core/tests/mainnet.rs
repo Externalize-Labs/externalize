@@ -10,8 +10,9 @@ use externalize_core::archive;
 use externalize_core::bundle::{Claim, Hex32, Xdr};
 use externalize_core::inclusion::{self, Invocation};
 use externalize_core::xdr::*;
-use externalize_core::{Bundle, Certificate, Error, Network, TrustSet, verify_ancestors};
+use externalize_core::{Bundle, Certificate, Error, Network, TrustSet, prove_ancestor, verify_ancestors};
 use flate2::read::GzDecoder;
+use sha2::Digest;
 
 const DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/mainnet");
 const LAST: u32 = 64_791_359;
@@ -103,6 +104,57 @@ fn certified_ledger_vouches_for_its_ancestors() {
     let seqs = verify_ancestors(&newest, &older).unwrap();
     assert_eq!(seqs.len(), 63);
     assert_eq!(seqs.first(), Some(&(LAST - 1)));
+}
+
+/// Headers of both fixture checkpoints: 64791232..=64791295 and 64791296..=64791359.
+fn two_checkpoints_of_headers() -> Vec<LedgerHeaderHistoryEntry> {
+    let mut headers: Vec<LedgerHeaderHistoryEntry> = frames("ledger-03dca2ff.xdr.gz");
+    headers.extend(frames::<LedgerHeaderHistoryEntry>("ledger-03dca33f.xdr.gz"));
+    headers
+}
+
+const IN_PREVIOUS_CHECKPOINT: u32 = 64_791_250;
+
+#[test]
+fn a_certified_ledger_proves_one_from_the_previous_checkpoint() {
+    let newest = last().verify(&trust()).unwrap();
+    let proven = prove_ancestor(&newest, &two_checkpoints_of_headers(), IN_PREVIOUS_CHECKPOINT).unwrap();
+    assert_eq!(proven.header.ledger_seq, IN_PREVIOUS_CHECKPOINT);
+    // The proven entry's hash is its header's, and the next ledger links to it.
+    let hash: [u8; 32] = sha2::Sha256::digest(proven.header.to_xdr(Limits::none()).unwrap()).into();
+    assert_eq!(proven.hash.0, hash);
+    let next =
+        two_checkpoints_of_headers().into_iter().find(|e| e.header.ledger_seq == IN_PREVIOUS_CHECKPOINT + 1).unwrap();
+    assert_eq!(next.header.previous_ledger_hash.0, hash);
+}
+
+#[test]
+fn an_edited_header_breaks_the_chain_even_with_its_hash_recomputed() {
+    let newest = last().verify(&trust()).unwrap();
+    let mut headers = two_checkpoints_of_headers();
+    let forged = headers.iter_mut().find(|e| e.header.ledger_seq == 64_791_300).unwrap();
+    forged.header.scp_value.close_time.0 += 1;
+    forged.hash = Hash(sha2::Sha256::digest(forged.header.to_xdr(Limits::none()).unwrap()).into());
+    // Ledger 64791301 still names the genuine header's hash, so the walk stops there.
+    assert_eq!(prove_ancestor(&newest, &headers, IN_PREVIOUS_CHECKPOINT), Err(Error::BrokenChain(64_791_300)));
+}
+
+#[test]
+fn a_missing_archive_file_is_named_by_its_newest_ledger() {
+    let newest = last().verify(&trust()).unwrap();
+    let only_newer: Vec<LedgerHeaderHistoryEntry> = frames("ledger-03dca33f.xdr.gz");
+    assert_eq!(prove_ancestor(&newest, &only_newer, IN_PREVIOUS_CHECKPOINT), Err(Error::MissingHeader(64_791_295)));
+}
+
+#[test]
+fn a_ledger_vouches_only_for_its_ancestors() {
+    let newest = last().verify(&trust()).unwrap();
+    for target in [LAST, LAST + 1] {
+        assert_eq!(
+            prove_ancestor(&newest, &two_checkpoints_of_headers(), target),
+            Err(Error::NotAnAncestor { ledger: target, trusted: LAST })
+        );
+    }
 }
 
 #[test]

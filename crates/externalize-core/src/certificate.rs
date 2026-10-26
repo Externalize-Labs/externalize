@@ -113,6 +113,38 @@ impl Certificate {
     }
 }
 
+/// Proves ledger `target`, older than `trusted`, from archived headers, and
+/// returns its header.
+///
+/// `headers` may hold whole archive `ledger-*` files: only the entries from
+/// `target` up to the ledger just before `trusted` are used, and every one of
+/// them must be present, since each links to the next by its hash.
+pub fn prove_ancestor(
+    trusted: &CertifiedLedger,
+    headers: &[LedgerHeaderHistoryEntry],
+    target: u32,
+) -> Result<LedgerHeaderHistoryEntry, Error> {
+    let newest = trusted.sequence();
+    if target >= newest {
+        return Err(Error::NotAnAncestor { ledger: target, trusted: newest });
+    }
+    let mut by_seq = std::collections::BTreeMap::new();
+    for entry in headers.iter().filter(|e| (target..newest).contains(&e.header.ledger_seq)) {
+        let seq = entry.header.ledger_seq;
+        if by_seq.get(&seq).is_some_and(|known| *known != entry) {
+            return Err(Error::BrokenChain(seq)); // two different headers claim the same ledger
+        }
+        by_seq.insert(seq, entry);
+    }
+    // Report the gap nearest the trusted ledger: that is where the walk stops.
+    if let Some(missing) = (target..newest).rev().find(|s| !by_seq.contains_key(s)) {
+        return Err(Error::MissingHeader(missing));
+    }
+    let chain: Vec<LedgerHeaderHistoryEntry> = by_seq.values().map(|e| (*e).clone()).collect();
+    verify_ancestors(trusted, &chain)?;
+    by_seq.get(&target).map(|e| (*e).clone()).ok_or(Error::MissingHeader(target))
+}
+
 /// Verifies headers older than a certified one by walking `previousLedgerHash`.
 ///
 /// `older` may be in any order but must be contiguous down from

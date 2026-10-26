@@ -11,21 +11,53 @@
 //! A rejection is `{ "verified": false, "error": "…" }`.
 
 use serde_json::{Value, json};
-use stellar_xdr::{ContractEvent, ContractEventBody};
+use stellar_xdr::{ContractEvent, ContractEventBody, LedgerHeaderHistoryEntry};
 
 use crate::bundle::{Claim, Verified};
-use crate::{Error, TrustSet};
+use crate::{CertifiedLedger, Error, TrustSet};
 
-/// The report for a verified bundle. With `events`, each invocation claim
-/// also lists its proven contract events, decoded.
-#[allow(clippy::indexing_slicing, reason = "writing a key into a serde_json object never panics")]
-pub fn verified(v: &Verified, trust: &TrustSet, events: bool) -> Value {
-    let l = &v.ledger;
+/// A certified ledger: sequence, hash, close time, signers and per-org agreement.
+fn certified(l: &CertifiedLedger, trust: &TrustSet) -> Value {
     let orgs: Vec<_> = trust
         .org_report(l.signers())
         .into_iter()
         .map(|o| json!({ "name": o.name, "signed": o.signed, "validators": o.validators, "satisfied": o.satisfied }))
         .collect();
+    json!({
+        "sequence": l.sequence(),
+        "hash": hex::encode(l.hash()),
+        "close_time": l.close_time(),
+        "signers": l.signers().iter().map(ToString::to_string).collect::<Vec<_>>(),
+        "orgs": orgs,
+    })
+}
+
+/// The report for a ledger proven by ancestry: the older ledger, and the
+/// certified ledger whose hash chain reaches it.
+///
+/// ```json
+/// { "verified": true,
+///   "ledger": { "sequence": 64791250, "hash": "…", "close_time": 1758… },
+///   "via": { "sequence": 64791359, … same shape as a verified bundle's ledger … },
+///   "links": 109 }
+/// ```
+pub fn ancestry(proven: &LedgerHeaderHistoryEntry, via: &CertifiedLedger, trust: &TrustSet) -> Value {
+    json!({
+        "verified": true,
+        "ledger": {
+            "sequence": proven.header.ledger_seq,
+            "hash": hex::encode(proven.hash.0),
+            "close_time": proven.header.scp_value.close_time.0,
+        },
+        "via": certified(via, trust),
+        "links": via.sequence().saturating_sub(proven.header.ledger_seq),
+    })
+}
+
+/// The report for a verified bundle. With `events`, each invocation claim
+/// also lists its proven contract events, decoded.
+#[allow(clippy::indexing_slicing, reason = "writing a key into a serde_json object never panics")]
+pub fn verified(v: &Verified, trust: &TrustSet, events: bool) -> Value {
     let claims: Vec<_> = v
         .claims
         .iter()
@@ -45,17 +77,7 @@ pub fn verified(v: &Verified, trust: &TrustSet, events: bool) -> Value {
             }
         })
         .collect();
-    json!({
-        "verified": true,
-        "ledger": {
-            "sequence": l.sequence(),
-            "hash": hex::encode(l.hash()),
-            "close_time": l.close_time(),
-            "signers": l.signers().iter().map(ToString::to_string).collect::<Vec<_>>(),
-            "orgs": orgs,
-        },
-        "claims": claims,
-    })
+    json!({ "verified": true, "ledger": certified(&v.ledger, trust), "claims": claims })
 }
 
 /// The report for a bundle that did not verify.

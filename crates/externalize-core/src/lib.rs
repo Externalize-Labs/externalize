@@ -37,7 +37,7 @@ mod trust;
 
 #[cfg(feature = "bundle")]
 pub use bundle::Bundle;
-pub use certificate::{Certificate, CertifiedLedger, verify_ancestors};
+pub use certificate::{Certificate, CertifiedLedger, prove_ancestor, verify_ancestors};
 pub use error::Error;
 pub use network::Network;
 pub use trust::{OrgReport, TrustSet};

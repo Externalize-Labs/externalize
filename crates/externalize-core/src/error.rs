@@ -82,6 +82,21 @@ pub enum Error {
     #[error("ledger {0}: header is not an ancestor of the trusted ledger")]
     BrokenChain(u32),
 
+    /// The ledger to prove is not older than the certified one.
+    #[error(
+        "ledger {ledger} is not older than the certified ledger {trusted}; a ledger vouches only for its ancestors"
+    )]
+    NotAnAncestor {
+        /// Ledger that was to be proven.
+        ledger: u32,
+        /// Sequence of the certified ledger.
+        trusted: u32,
+    },
+
+    /// A header needed to link back to the certified ledger was not supplied.
+    #[error("ledger {0}: header missing; supply the archive ledger file that contains it")]
+    MissingHeader(u32),
+
     /// The transaction is not in the ledger's result set.
     #[error("transaction {0} is not part of the ledger")]
     TransactionNotFound(String),

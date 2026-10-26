@@ -7,8 +7,8 @@ use std::process::ExitCode;
 
 use clap::{Parser, Subcommand};
 use externalize_core::bundle::{Claim, Verified};
-use externalize_core::xdr::{ReadXdr, ScpHistoryEntry, ScpQuorumSet, ScpStatementPledges};
-use externalize_core::{Bundle, Network, TrustSet, archive, quorum, report};
+use externalize_core::xdr::{LedgerHeaderHistoryEntry, ReadXdr, ScpHistoryEntry, ScpQuorumSet, ScpStatementPledges};
+use externalize_core::{Bundle, Network, TrustSet, archive, prove_ancestor, quorum, report};
 
 #[derive(Parser)]
 #[command(
@@ -59,6 +59,26 @@ enum Command {
         /// Network for the built-in trust set (`public` or `testnet`).
         #[arg(long, default_value = "public")]
         network: String,
+    },
+    /// Prove an older ledger: certify a bundle's ledger, then follow each
+    /// header's previous-ledger hash back through archived headers.
+    /// Exit status: 0 proven, 1 rejected, 2 could not run.
+    Ancestry {
+        /// Bundle whose ledger is certified (`-` for stdin). Its claims are verified too.
+        #[arg(long)]
+        bundle: PathBuf,
+        /// Archive `ledger-*.xdr.gz` files covering every ledger from `--ledger` up to the bundle's.
+        #[arg(long, required = true, num_args = 1..)]
+        headers: Vec<PathBuf>,
+        /// Sequence of the ledger to prove.
+        #[arg(long)]
+        ledger: u32,
+        /// Trust set to verify against. Defaults to the built-in set for the bundle's network.
+        #[arg(long)]
+        trust: Option<PathBuf>,
+        /// Print a machine-readable result.
+        #[arg(long)]
+        json: bool,
     },
     /// Inspect or derive trust sets.
     #[command(subcommand)]
@@ -113,6 +133,9 @@ fn run(cli: Cli) -> Result<ExitCode, String> {
             Ok(ExitCode::SUCCESS)
         }
         Command::Certify { ledger, scp, trust, network } => certify(&ledger, &scp, trust.as_deref(), &network),
+        Command::Ancestry { bundle, headers, ledger, trust, json } => {
+            ancestry(&bundle, &headers, ledger, trust.as_deref(), json)
+        }
         Command::Trust(TrustCommand::Show { file, network }) => {
             print!("{}", describe(&load_trust(file.as_deref(), &network)?));
             Ok(ExitCode::SUCCESS)
@@ -330,6 +353,46 @@ fn certify(ledger: &Path, scp: &Path, trust: Option<&Path>, network: &str) -> Re
     }
     eprintln!("{} of {} ledgers certified", certs.len().saturating_sub(failed), certs.len());
     Ok(if failed == 0 { ExitCode::SUCCESS } else { ExitCode::from(1) })
+}
+
+/// Proves `target` from the bundle's certified ledger and archived headers.
+fn ancestry(
+    bundle: &Path,
+    header_files: &[PathBuf],
+    target: u32,
+    trust: Option<&Path>,
+    as_json: bool,
+) -> Result<ExitCode, String> {
+    let mut headers: Vec<LedgerHeaderHistoryEntry> = Vec::new();
+    for f in header_files {
+        headers.extend(read_gz::<LedgerHeaderHistoryEntry>(f)?);
+    }
+    let outcome = match Bundle::from_json(&read_input(bundle)?) {
+        Ok(b) => {
+            let trust = load_trust(trust, &b.network)?;
+            b.verify(&trust).and_then(|v| prove_ancestor(&v.ledger, &headers, target).map(|p| (p, v.ledger, trust)))
+        }
+        Err(e) => Err(e),
+    };
+    match (&outcome, as_json) {
+        (Ok((p, via, t)), true) => println!("{}", report::ancestry(p, via, t)),
+        (Ok((p, via, t)), false) => {
+            let agreed = t.org_report(via.signers()).iter().filter(|o| o.satisfied).count();
+            print!(
+                "VERIFIED  ledger {}\n  hash      {}\n  closed    {}\n  via       ledger {}, certified by {} trusted validators ({} orgs agree), {} links back\n",
+                p.header.ledger_seq,
+                hex::encode(p.hash.0),
+                utc(p.header.scp_value.close_time.0),
+                via.sequence(),
+                via.signers().len(),
+                agreed,
+                via.sequence().saturating_sub(p.header.ledger_seq)
+            );
+        }
+        (Err(e), true) => println!("{}", report::rejected(e)),
+        (Err(e), false) => eprintln!("REJECTED  {e}"),
+    }
+    Ok(if outcome.is_ok() { ExitCode::SUCCESS } else { ExitCode::from(1) })
 }
 
 /// The quorum set referenced by the most EXTERNALIZE statements in the file.
