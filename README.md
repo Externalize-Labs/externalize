@@ -123,7 +123,10 @@ console.log(`ledger ${report.ledger.sequence}, signed by ${report.ledger.signers
 `verify(bundle, trustToml?, events?)` returns the same report as
 `externalize verify --json`; a bundle that fails is a report with
 `verified: false`, never an exception. `inspect(bundle)` shows what a bundle
-claims, marked unverified. [`examples/web`](examples/web/index.html) is a page
+claims, marked unverified. The package ships TypeScript types for both:
+`verify` returns `VerifyReport | Rejection`, so checking `report.verified`
+narrows it, and claims narrow on `kind` (`TransactionClaim` or
+`InvocationClaim`). [`examples/web`](examples/web/index.html) is a page
 that verifies a dropped bundle locally; CI runs the package from Node against
 the mainnet fixture.
 

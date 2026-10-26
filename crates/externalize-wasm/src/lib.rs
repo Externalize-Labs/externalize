@@ -14,13 +14,98 @@
 use externalize_core::{Bundle, TrustSet, report};
 use wasm_bindgen::prelude::*;
 
+// TypeScript types for the reports, matching `externalize_core::report`.
+#[wasm_bindgen(typescript_custom_section)]
+const REPORT_TYPES: &str = r#"
+/** How one trusted organization voted on a certified ledger. */
+export interface OrgAgreement {
+  name: string;
+  /** Distinct validators of this org whose EXTERNALIZE signatures verified. */
+  signed: number;
+  validators: number;
+  /** Whether the org's own threshold was met. */
+  satisfied: boolean;
+}
+
+/** A ledger whose header the trust set's validators signed. */
+export interface CertifiedLedger {
+  sequence: number;
+  /** Ledger hash, lowercase hex. */
+  hash: string;
+  /** Close time, Unix seconds. */
+  close_time: number;
+  /** Validators whose signatures verified, as G… strkeys. */
+  signers: string[];
+  orgs: OrgAgreement[];
+}
+
+/** A proven contract event. `topics` and `data` are ScVals in stellar-xdr's JSON form. */
+export interface DecodedEvent {
+  /** Emitting contract, C… strkey. */
+  contract: string | null;
+  topics: unknown[];
+  data: unknown;
+}
+
+/** The transaction was applied in the ledger (`succeeded` false: applied, but failed). */
+export interface TransactionClaim {
+  kind: "transaction";
+  tx_hash: string;
+  succeeded: boolean;
+}
+
+/** A contract call's return value and events, proven. */
+export interface InvocationClaim {
+  kind: "invocation";
+  tx_hash: string;
+  op_index: number;
+  /** Number of proven events. */
+  events: number;
+  succeeded: boolean;
+  /** Present when `verify` was called with `events: true`. */
+  decoded_events?: DecodedEvent[];
+}
+
+export type Claim = TransactionClaim | InvocationClaim;
+
+/** A bundle that verified: the certified ledger and every claim, proven. */
+export interface VerifyReport {
+  verified: true;
+  ledger: CertifiedLedger;
+  claims: Claim[];
+}
+
+/** A bundle that did not verify. Nothing in it can be relied on. */
+export interface Rejection {
+  verified: false;
+  error: string;
+}
+
+/** What `inspect` saw in a bundle. None of it is verified. */
+export interface InspectReport {
+  verified: false;
+  network: string;
+  ledger: { sequence: number; close_time: number; protocol: number };
+  scp_envelopes: number;
+  externalize_envelopes: number;
+  /** Transactions in the bundled result set, or null without one. */
+  results: number | null;
+  transactions_included: boolean;
+  claims: InspectClaim[];
+}
+
+export type InspectClaim =
+  | { kind: "transaction"; tx_hash: string }
+  | { kind: "invocation"; tx_hash: string; op_index: number; events: number };
+"#;
+
 /// Verifies a proof bundle (JSON text) and returns the report as an object.
 ///
 /// Without `trust_toml`, the built-in trust set for the bundle's network is
 /// used (public network tier-1, or testnet). With `events`, invocation claims
 /// list their proven contract events, decoded. A bundle that does not verify
 /// yields `{ verified: false, error }`; nothing throws.
-#[wasm_bindgen]
+#[wasm_bindgen(unchecked_return_type = "VerifyReport | Rejection")]
 pub fn verify(bundle_json: &str, trust_toml: Option<String>, events: Option<bool>) -> JsValue {
     let report = verify_to_json(bundle_json, trust_toml.as_deref(), events.unwrap_or(false));
     js_sys::JSON::parse(&report).unwrap_or(JsValue::NULL)
@@ -28,7 +113,7 @@ pub fn verify(bundle_json: &str, trust_toml: Option<String>, events: Option<bool
 
 /// What a bundle claims, without verifying anything (`verified` is always
 /// false). Throws if the text is not a bundle at all.
-#[wasm_bindgen]
+#[wasm_bindgen(unchecked_return_type = "InspectReport")]
 pub fn inspect(bundle_json: &str) -> Result<JsValue, JsError> {
     let text = inspect_to_json(bundle_json).map_err(|e| JsError::new(&e))?;
     js_sys::JSON::parse(&text).map_err(|_| JsError::new("could not build the inspection"))
