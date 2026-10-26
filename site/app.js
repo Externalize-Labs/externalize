@@ -22,11 +22,19 @@ function run(text, note, file) {
 }
 
 function render(text, note, file) {
+  const t0 = performance.now();
   const r = verify(text, undefined, true);
+  const elapsedMs = Math.round(performance.now() - t0);
   if (!r || !r.verified) return renderRejected(text, r ? r.error : "unknown error", note);
   const l = r.ledger;
   const agreed = l.orgs.filter((o) => o.satisfied).length;
+  const signatures = l.signers.length;
+  const hashChains = 1 + (r.claims ? r.claims.length : 0);
+  const bytes = new Blob([text]).size;
+  const kb = Math.round(bytes / 1024);
+
   let html = `<p class="verdict"><span class="mark" aria-hidden="true">✓</span>Verified</p>`;
+  html += `<p class="muted">Checked ${signatures.toLocaleString()} Ed25519 signature${signatures === 1 ? "" : "s"} and ${hashChains.toLocaleString()} hash chain${hashChains === 1 ? "" : "s"} in ${elapsedMs.toLocaleString()} ms, here in your browser. Bundle: ${kb.toLocaleString()} KB.</p>`;
   if (note) html += `<p class="muted">${note}</p>`;
   html += `<dl class="facts">
     <dt>Ledger</dt><dd>${l.sequence.toLocaleString("en-US")}</dd>
