@@ -65,6 +65,9 @@ h3 { font-size: 16px; margin: 22px 0 8px; }
 .claim pre { background: var(--bg); border-radius: 8px; padding: 10px; overflow-x: auto; font-size: 12px; max-height: 320px; }
 .tag { display: inline-block; font-size: 12px; border-radius: 999px; padding: 1px 8px; background: var(--accent-soft); color: var(--accent); font-weight: 600; margin-left: 6px; }
 .tag.fail { background: var(--danger-soft); color: var(--danger); }
+.copy-link { font-size: 13px; padding: 2px 8px; margin: 0 4px; vertical-align: baseline; }
+.copy-fallback { margin: 8px 0 12px; }
+.copy-fallback input { width: 100%; max-width: 560px; font: 13px/1.4 ui-monospace, SFMono-Regular, Consolas, monospace; color: inherit; background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 6px 10px; }
 .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
 footer { border-top: 1px solid var(--line); padding: 20px 24px; color: var(--muted); font-size: 14px; text-align: center; }
 @media (max-width: 600px) {

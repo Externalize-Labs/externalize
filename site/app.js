@@ -54,10 +54,47 @@ function render(text, note, file) {
   if (file) {
     if (download) URL.revokeObjectURL(download);
     download = URL.createObjectURL(new Blob([text], { type: "application/json" }));
-    html += `<p class="muted"><a href="${download}" download="${esc(file)}">Download this proof</a> to check it again later, offline,
-      with <code>externalize verify ${esc(file)}</code>.</p>`;
+    html += `<p class="muted"><a href="${download}" download="${esc(file)}">Download this proof</a>
+      <span aria-hidden="true"> · </span><button type="button" class="copy-link" id="copy-link" aria-live="polite">Copy link</button>
+      to check it again later, offline, with <code>externalize verify ${esc(file)}</code>.</p>
+      <div class="copy-fallback" id="copy-fallback" hidden>
+        <label for="copy-fallback-input" class="sr">Shareable proof link</label>
+        <input type="text" id="copy-fallback-input" readonly value="${esc(location.href)}">
+      </div>`;
   }
   message(html);
+  const copyBtn = document.getElementById("copy-link");
+  if (copyBtn) {
+    copyBtn.addEventListener("click", async () => {
+      const url = location.href;
+      const fallback = document.getElementById("copy-fallback");
+      const fallbackInput = document.getElementById("copy-fallback-input");
+      if (navigator.clipboard && typeof navigator.clipboard.writeText === "function") {
+        try {
+          await navigator.clipboard.writeText(url);
+          copyBtn.textContent = "Copied";
+          setTimeout(() => {
+            if (copyBtn.textContent === "Copied") {
+              copyBtn.textContent = "Copy link";
+            }
+          }, 2000);
+          return;
+        } catch {
+          // Insecure context or permission denied -> reveal fallback input
+        }
+      }
+      if (fallback && fallbackInput) {
+        fallback.hidden = false;
+        fallbackInput.value = url;
+        fallbackInput.focus();
+        fallbackInput.select();
+      }
+    });
+    const fallbackInput = document.getElementById("copy-fallback-input");
+    if (fallbackInput) {
+      fallbackInput.addEventListener("focus", () => fallbackInput.select());
+    }
+  }
 }
 
 function renderRejected(text, error, note) {
