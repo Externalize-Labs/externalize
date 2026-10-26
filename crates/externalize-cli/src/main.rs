@@ -67,7 +67,7 @@ enum Command {
         /// Bundle whose ledger is certified (`-` for stdin). Its claims are verified too.
         #[arg(long)]
         bundle: PathBuf,
-        /// Archive `ledger-*.xdr.gz` files covering every ledger from `--ledger` up to the bundle's.
+        /// Archive `ledger-*.xdr.gz` files or directories covering every ledger from `--ledger` up to the bundle's.
         #[arg(long, required = true, num_args = 1..)]
         headers: Vec<PathBuf>,
         /// Sequence of the ledger to prove.
@@ -355,6 +355,31 @@ fn certify(ledger: &Path, scp: &Path, trust: Option<&Path>, network: &str) -> Re
     Ok(if failed == 0 { ExitCode::SUCCESS } else { ExitCode::from(1) })
 }
 
+/// Checkpoint sequence encoded in a `ledger-????????.xdr.gz` file name, if any.
+fn checkpoint_from_name(path: &Path) -> Option<u32> {
+    let name = path.file_name()?.to_str()?;
+    let hex = name.strip_prefix("ledger-")?.strip_suffix(".xdr.gz")?;
+    (hex.len() == 8 && hex.bytes().all(|b| b.is_ascii_hexdigit())).then(|| u32::from_str_radix(hex, 16).ok()).flatten()
+}
+
+/// Recursively collects every `ledger-????????.xdr.gz` file under `dir`.
+fn collect_header_files(dir: &Path, out: &mut Vec<PathBuf>) -> Result<(), String> {
+    let entries = std::fs::read_dir(dir).map_err(|e| format!("reading {}: {e}", dir.display()))?;
+    let mut paths: Vec<PathBuf> = Vec::new();
+    for entry in entries {
+        paths.push(entry.map_err(|e| format!("reading {}: {e}", dir.display()))?.path());
+    }
+    paths.sort();
+    for p in paths {
+        if p.is_dir() {
+            collect_header_files(&p, out)?;
+        } else if checkpoint_from_name(&p).is_some() {
+            out.push(p);
+        }
+    }
+    Ok(())
+}
+
 /// Proves `target` from the bundle's certified ledger and archived headers.
 fn ancestry(
     bundle: &Path,
@@ -363,11 +388,28 @@ fn ancestry(
     trust: Option<&Path>,
     as_json: bool,
 ) -> Result<ExitCode, String> {
-    let mut headers: Vec<LedgerHeaderHistoryEntry> = Vec::new();
+    let mut candidates: Vec<PathBuf> = Vec::new();
     for f in header_files {
+        if f.is_dir() {
+            collect_header_files(f, &mut candidates)?;
+        } else {
+            candidates.push(f.clone());
+        }
+    }
+    let bundle_text = read_input(bundle)?;
+    let newest = Bundle::from_json(&bundle_text).ok().map(|b| b.ledger.0.header.ledger_seq);
+    let mut headers: Vec<LedgerHeaderHistoryEntry> = Vec::new();
+    for f in &candidates {
+        if let (Some(cp), Some(top)) = (checkpoint_from_name(f), newest) {
+            let needed = target < top
+                && (archive::checkpoint(target)..=archive::checkpoint(top.saturating_sub(1))).contains(&cp);
+            if !needed {
+                continue;
+            }
+        }
         headers.extend(read_gz::<LedgerHeaderHistoryEntry>(f)?);
     }
-    let outcome = match Bundle::from_json(&read_input(bundle)?) {
+    let outcome = match Bundle::from_json(&bundle_text) {
         Ok(b) => {
             let trust = load_trust(trust, &b.network)?;
             b.verify(&trust).and_then(|v| prove_ancestor(&v.ledger, &headers, target).map(|p| (p, v.ledger, trust)))

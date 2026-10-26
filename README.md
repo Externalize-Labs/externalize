@@ -77,7 +77,7 @@ as `#tx=<hash>`, and the bundle can be downloaded to verify again offline.
 | `externalize verify proof.json` | Verify a bundle; `--events` decodes every proven contract event, `--json` for machines. Exit 0 verified, 1 rejected, 2 could not run |
 | `externalize inspect proof.json` | Show what a bundle claims, without trusting any of it; `--json` for machines |
 | `externalize certify --ledger ledger-….xdr.gz --scp scp-….xdr.gz` | Certify all 64 ledgers of a history archive checkpoint |
-| `externalize ancestry --bundle proof.json --headers ledger-….xdr.gz… --ledger N` | Prove an older ledger: certify the bundle's ledger, then follow previous-ledger hashes back through archived headers to ledger `N`; `--json` for machines |
+| `externalize ancestry --bundle proof.json --headers <file-or-dir>… --ledger N` | Prove an older ledger: certify the bundle's ledger, then follow previous-ledger hashes back through archived headers (files or an archive directory) to ledger `N`; `--json` for machines |
 | `externalize trust show [--network testnet]` | Print a built-in trust set |
 | `externalize trust derive scp-….xdr.gz --names-from trust/public.toml` | Rebuild a trust set from what validators actually used |
 

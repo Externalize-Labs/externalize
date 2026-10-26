@@ -94,7 +94,7 @@ pub enum Error {
     },
 
     /// A header needed to link back to the certified ledger was not supplied.
-    #[error("ledger {0}: header missing; supply the archive ledger file that contains it")]
+    #[error("ledger {0}: header missing; supply {path} from the history archive", path = ledger_archive_path(.0))]
     MissingHeader(u32),
 
     /// The transaction is not in the ledger's result set.
@@ -150,4 +150,13 @@ impl Error {
     pub(crate) fn xdr(what: &'static str, e: stellar_xdr::Error) -> Self {
         Self::Xdr { what, reason: e.to_string() }
     }
+}
+
+fn ledger_archive_path(&seq: &u32) -> String {
+    let cp = (seq / 64).saturating_add(1).saturating_mul(64).saturating_sub(1);
+    let h = format!("{cp:08x}");
+    let (a, tail) = h.split_at(2);
+    let (b, tail) = tail.split_at(2);
+    let (c, _) = tail.split_at(2);
+    format!("ledger/{a}/{b}/{c}/ledger-{h}.xdr.gz")
 }
