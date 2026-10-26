@@ -8,13 +8,16 @@ All notable changes to this project are documented here. The format follows
 
 ### Added
 
+- TypeScript types for `externalize-wasm`: `verify` returns
+  `VerifyReport | Rejection` and `inspect` an `InspectReport`, with typed
+  ledgers, org agreement, claims (narrowed on `kind`) and decoded events,
+  instead of `any`.
 - `externalize ancestry`: prove a ledger older than a certified one by
   following previous-ledger hashes back through archived `ledger-*` files, as
   text or `--json`. The library side is `prove_ancestor`, which picks the
   needed headers out of whole archive files and names any missing ledger
   (`Error::MissingHeader`). Proving a ledger that is not older is
   `Error::NotAnAncestor`.
-
 - A [browser verifier](https://externalize-labs.github.io/externalize/) on
   GitHub Pages: `externalize-wasm` checks a real mainnet bundle, a tampered
   copy, or a bundle you bring, with nothing sent to a server.

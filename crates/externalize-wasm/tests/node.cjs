@@ -34,4 +34,12 @@ assert.equal(seen.verified, false);
 assert.equal(seen.ledger.sequence, 64791359);
 assert.throws(() => pkg.inspect("{}"));
 
+// TypeScript users get the report types, not `any`.
+const dts = fs.readFileSync(path.resolve(process.argv[2] || "pkg", "externalize_wasm.d.ts"), "utf8");
+for (const type of ["VerifyReport", "Rejection", "CertifiedLedger", "OrgAgreement", "InvocationClaim", "DecodedEvent", "InspectReport"]) {
+  assert.match(dts, new RegExp(`export (interface|type) ${type}\\b`), `${type} missing from the .d.ts`);
+}
+assert.match(dts, /export function verify\([^)]*\): VerifyReport \| Rejection;/);
+assert.match(dts, /export function inspect\([^)]*\): InspectReport;/);
+
 console.log(`ok: ledger ${report.ledger.sequence} verified from JavaScript`);
