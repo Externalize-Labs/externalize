@@ -34,12 +34,29 @@ assert.equal(seen.verified, false);
 assert.equal(seen.ledger.sequence, 64791359);
 assert.throws(() => pkg.inspect("{}"));
 
+const headersNewer = fs.readFileSync(
+  path.join(__dirname, "../../externalize-core/tests/fixtures/mainnet/ledger-03dca33f.xdr.gz"),
+);
+const headersOlder = fs.readFileSync(
+  path.join(__dirname, "../../externalize-core/tests/fixtures/mainnet/ledger-03dca2ff.xdr.gz"),
+);
+const ancestry = pkg.proveAncestor(bundle, [headersOlder, headersNewer], 64791250);
+assert.equal(ancestry.verified, true, ancestry.error);
+assert.equal(ancestry.ledger.sequence, 64791250);
+assert.equal(ancestry.via.sequence, 64791359);
+assert.equal(ancestry.links, 109);
+
+const missingOlder = pkg.proveAncestor(bundle, [headersNewer], 64791250);
+assert.equal(missingOlder.verified, false);
+assert.match(missingOlder.error, /header missing/);
+
 // TypeScript users get the report types, not `any`.
 const dts = fs.readFileSync(path.resolve(process.argv[2] || "pkg", "externalize_wasm.d.ts"), "utf8");
-for (const type of ["VerifyReport", "Rejection", "CertifiedLedger", "OrgAgreement", "InvocationClaim", "DecodedEvent", "InspectReport"]) {
+for (const type of ["VerifyReport", "AncestryReport", "Rejection", "CertifiedLedger", "OrgAgreement", "InvocationClaim", "DecodedEvent", "InspectReport"]) {
   assert.match(dts, new RegExp(`export (interface|type) ${type}\\b`), `${type} missing from the .d.ts`);
 }
 assert.match(dts, /export function verify\([^)]*\): VerifyReport \| Rejection;/);
+assert.match(dts, /export function proveAncestor\([^)]*\): AncestryReport \| Rejection;/);
 assert.match(dts, /export function inspect\([^)]*\): InspectReport;/);
 
 console.log(`ok: ledger ${report.ledger.sequence} verified from JavaScript`);
