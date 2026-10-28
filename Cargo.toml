@@ -3,7 +3,7 @@ resolver = "3"
 members = ["crates/externalize-core", "crates/externalize-cli", "crates/externalize-wasm"]
 
 [workspace.package]
-version = "0.1.1"
+version = "0.2.0"
 edition = "2024"
 rust-version = "1.88"
 license = "Apache-2.0"
@@ -12,7 +12,7 @@ homepage = "https://github.com/Externalize-Labs"
 authors = ["Externalize Labs"]
 
 [workspace.dependencies]
-externalize-core = { path = "crates/externalize-core", version = "0.1.0" }
+externalize-core = { path = "crates/externalize-core", version = "0.2.0" }
 stellar-xdr = { version = "30.0.0", default-features = false, features = ["std", "base64"] }
 ed25519-dalek = { version = "3", default-features = false }
 sha2 = "0.11"

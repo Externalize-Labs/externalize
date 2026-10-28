@@ -629,7 +629,7 @@ checksum = "40404c3f5f511ec4da6fe866ddf6a717c309fdbb69fbbad7b0f3edab8f2e835f"
 
 [[package]]
 name = "externalize-cli"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "assert_cmd",
  "clap",
@@ -641,7 +641,7 @@ dependencies = [
 
 [[package]]
 name = "externalize-core"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "criterion",
  "ed25519-dalek",
@@ -658,7 +658,7 @@ dependencies = [
 
 [[package]]
 name = "externalize-wasm"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "externalize-core",
  "js-sys",
