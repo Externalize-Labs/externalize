@@ -14,7 +14,7 @@ authors = ["Externalize Labs"]
 [workspace.dependencies]
 externalize-core = { path = "crates/externalize-core", version = "0.1.0" }
 stellar-xdr = { version = "30.0.0", default-features = false, features = ["std", "base64"] }
-ed25519-dalek = { version = "3", default-features = false }
+ed25519-dalek = { version = "3", default-features = false, features = ["batch"] }
 sha2 = "0.11"
 thiserror = "2"
 serde = { version = "1", features = ["derive"] }
