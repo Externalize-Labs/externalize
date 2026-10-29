@@ -15,6 +15,9 @@ authors.workspace = true
 [lib]
 crate-type = ["cdylib", "rlib"]
 
+[features]
+default = ["externalize-core/archive"]
+
 [dependencies]
 externalize-core = { path = "../externalize-core", version = "0.2.0", default-features = false, features = ["report"] }
 serde_json.workspace = true
