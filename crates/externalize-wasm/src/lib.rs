@@ -75,6 +75,14 @@ export interface VerifyReport {
   claims: Claim[];
 }
 
+/** An older ledger proven by walking previous-ledger hashes back from a certified one. */
+export interface AncestryReport {
+  verified: true;
+  ledger: { sequence: number; hash: string; close_time: number };
+  via: CertifiedLedger;
+  links: number;
+}
+
 /** A bundle that did not verify. Nothing in it can be relied on. */
 export interface Rejection {
   verified: false;
@@ -153,6 +161,58 @@ pub fn verify_to_json(bundle_json: &str, trust_toml: Option<&str>, events: bool)
             Ok(v) => report::verified(&v, &trust, events),
             Err(e) => report::rejected(&e),
         })
+    });
+    match outcome {
+        Ok(v) => v.to_string(),
+        Err(e) => report::rejected(&e).to_string(),
+    }
+}
+
+/// Proves an older `ledger` from a proof bundle and archived `ledger-*.xdr.gz` files.
+///
+/// `header_files` are the gzipped contents of the archive checkpoint files covering
+/// `ledger` up to the bundle's certified ledger. Returns `{ verified: true, ledger, via, links }`
+/// or `{ verified: false, error }`; nothing throws.
+#[wasm_bindgen(js_name = proveAncestor, unchecked_return_type = "AncestryReport | Rejection")]
+pub fn prove_ancestor(
+    bundle_json: &str,
+    header_files: Vec<js_sys::Uint8Array>,
+    ledger: u32,
+    trust_toml: Option<String>,
+) -> JsValue {
+    let files: Vec<Vec<u8>> = header_files.into_iter().map(|a| a.to_vec()).collect();
+    let slices: Vec<&[u8]> = files.iter().map(Vec::as_slice).collect();
+    let report = prove_ancestor_to_json(bundle_json, &slices, ledger, trust_toml.as_deref());
+    js_sys::JSON::parse(&report).unwrap_or(JsValue::NULL)
+}
+
+/// [`prove_ancestor`] as plain Rust, returning the report's JSON text.
+pub fn prove_ancestor_to_json(
+    bundle_json: &str,
+    header_files: &[&[u8]],
+    ledger: u32,
+    trust_toml: Option<&str>,
+) -> String {
+    let outcome = Bundle::from_json(bundle_json).and_then(|bundle| {
+        let trust = match trust_toml {
+            Some(text) => TrustSet::from_toml(text)?,
+            None => match TrustSet::builtin(&bundle.network) {
+                Some(t) => t?,
+                None => {
+                    return Ok(serde_json::json!({
+                        "verified": false,
+                        "error": format!("no built-in trust set for {:?}; pass one", bundle.network),
+                    }));
+                }
+            },
+        };
+        let mut headers = Vec::new();
+        for bytes in header_files {
+            headers.extend(externalize_core::archive::read_gz_frames(*bytes)?);
+        }
+        let verified = bundle.verify(&trust)?;
+        let proven = externalize_core::prove_ancestor(&verified.ledger, &headers, ledger)?;
+        Ok(report::ancestry(&proven, &verified.ledger, &trust))
     });
     match outcome {
         Ok(v) => v.to_string(),

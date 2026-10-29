@@ -2,7 +2,7 @@
 
 #![allow(clippy::unwrap_used, clippy::indexing_slicing, missing_docs)]
 
-use externalize_wasm::{inspect_to_json, verify_to_json};
+use externalize_wasm::{inspect_to_json, prove_ancestor_to_json, verify_to_json};
 use serde_json::Value;
 
 const BUNDLE: &str = include_str!("../../externalize-core/tests/fixtures/mainnet/bundle-64791359.json");
@@ -51,4 +51,23 @@ fn inspect_describes_without_verifying() {
     assert_eq!(r["network"], "Public Global Stellar Network ; September 2015");
     assert_eq!(r["claims"].as_array().unwrap().len(), 2);
     assert!(inspect_to_json("{}").is_err());
+}
+
+fn run_ancestry(files: &[&[u8]], ledger: u32) -> Value {
+    serde_json::from_str(&prove_ancestor_to_json(BUNDLE, files, ledger, None)).unwrap()
+}
+
+#[test]
+fn proves_ancestor_and_rejects_when_headers_are_missing() {
+    let newer: &[u8] = include_bytes!("../../externalize-core/tests/fixtures/mainnet/ledger-03dca33f.xdr.gz");
+    let older: &[u8] = include_bytes!("../../externalize-core/tests/fixtures/mainnet/ledger-03dca2ff.xdr.gz");
+    let r = run_ancestry(&[older, newer], 64_791_250);
+    assert_eq!(r["verified"], true, "{r}");
+    assert_eq!(r["ledger"]["sequence"], 64_791_250);
+    assert_eq!(r["via"]["sequence"], 64_791_359);
+    assert_eq!(r["links"], 109);
+
+    let rejected = run_ancestry(&[newer], 64_791_250);
+    assert_eq!(rejected["verified"], false, "{rejected}");
+    assert!(rejected["error"].as_str().unwrap().contains("header missing"));
 }
