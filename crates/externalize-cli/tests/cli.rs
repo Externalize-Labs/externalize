@@ -68,6 +68,32 @@ fn ancestry_without_the_older_file_exits_one_and_says_what_is_missing() {
     assert!(err.contains("ledger 64791295: header missing"), "{err}");
 }
 
+#[test]
+fn ancestry_json_without_older_file_reports_rejection() {
+    let out = cli()
+        .args(["ancestry", "--json", "--bundle", BUNDLE, "--headers", HEADERS_NEWER, "--ledger", "64791250"])
+        .output()
+        .unwrap();
+    assert_eq!(out.status.code(), Some(1));
+    let v: serde_json::Value = serde_json::from_slice(&out.stdout).expect("stdout must be valid JSON");
+    assert_eq!(v["verified"], false);
+    let err = v["error"].as_str().expect("error field must be a string");
+    assert!(err.contains("header missing"), "{err}");
+}
+
+#[test]
+fn ancestry_json_for_certified_ledger_reports_not_older_rejection() {
+    let out = cli()
+        .args(["ancestry", "--json", "--bundle", BUNDLE, "--headers", HEADERS_NEWER, "--ledger", "64791359"])
+        .output()
+        .unwrap();
+    assert_eq!(out.status.code(), Some(1));
+    let v: serde_json::Value = serde_json::from_slice(&out.stdout).expect("stdout must be valid JSON");
+    assert_eq!(v["verified"], false);
+    let err = v["error"].as_str().expect("error field must be a string");
+    assert!(err.contains("not older"), "{err}");
+}
+
 fn cli() -> Command {
     Command::cargo_bin("externalize").unwrap()
 }
