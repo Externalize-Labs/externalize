@@ -6,6 +6,45 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Security
+
+- **Ledger headers were only partly certified.** Affected: v0.1.x to v0.2.0.
+  `Certificate::verify` checked that a quorum of trusted validators
+  EXTERNALIZEd the header's `scpValue` (transaction set hash, close time,
+  upgrades) and that the header hash matched the header. Validators sign
+  nothing else in the header, so anyone could rewrite any other field, such as
+  `txSetResultHash`, `previousLedgerHash` or the bucket list hash, recompute
+  the header hash, and still have it verify. Every claim that depends on
+  results was forgeable: whether a transaction was applied and succeeded,
+  Soroban return values and events (a forged bundle reported a successful
+  transaction as failed, and a bundle without a transaction set was accepted
+  for a transaction that never happened). So was ancestry (`prove_ancestor`,
+  `externalize ancestry`), which follows `previousLedgerHash`.
+- **Fix:** header N is now certified through ledger N+1. A quorum of trusted
+  validators must EXTERNALIZE one value V for slot N+1, ledger N+1's
+  transaction set must hash to `V.txSetHash` (legacy and generalized sets,
+  hashed as stellar-core does), and that set's `previousLedgerHash` must be the
+  hash of header N. See `docs/trust-model.md`.
+
+### Changed
+
+- Bundle format `externalize/bundle/v2`, with two required fields:
+  `next_scp` (ledger N+1's `ScpHistoryEntry`) and `next_transactions`
+  (its `TransactionHistoryEntry`). v1 bundles are refused
+  (`Error::V1Bundle`) and must be rebuilt. The conformance fixture is
+  regenerated as v2.
+- `Certificate` gains `next_scp` and `next_transactions`.
+  `archive::certificates` takes the transaction history entries too and
+  returns `Error::MissingSuccessor` for a header whose successor data is
+  missing.
+- `externalize certify` takes `--transactions`, and `--scp` and
+  `--transactions` accept the next checkpoint's files as well. Without them a
+  checkpoint's last ledger is reported as `NOT CERTIFIED` (exit status 1).
+- `externalize ancestry` and `proveAncestor` certify their trusted ledger
+  through its successor, carried by the v2 bundle.
+- New errors: `MissingSuccessor`, `SuccessorTxSetMismatch`,
+  `HeaderNotCommitted`, `V1Bundle`.
+
 ## [0.2.0] - 2026-10-28
 
 ### Added

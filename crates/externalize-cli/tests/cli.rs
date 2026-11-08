@@ -159,12 +159,35 @@ fn derived_trust_set_matches_the_shipped_one() {
 const LEDGER: &str =
     concat!(env!("CARGO_MANIFEST_DIR"), "/../externalize-core/tests/fixtures/mainnet/ledger-03dca33f.xdr.gz");
 
+const NEXT_SCP: &str =
+    concat!(env!("CARGO_MANIFEST_DIR"), "/../externalize-core/tests/fixtures/mainnet/scp-03dca37f.xdr.gz");
+const NEXT_TXS: &str =
+    concat!(env!("CARGO_MANIFEST_DIR"), "/../externalize-core/tests/fixtures/mainnet/transactions-64791360.xdr.gz");
+
 #[test]
-fn certifies_a_whole_mainnet_checkpoint() {
-    let out = cli().args(["certify", "--ledger", LEDGER, "--scp", SCP]).output().unwrap();
-    assert!(out.status.success());
+fn certify_needs_each_ledgers_successor() {
+    // The fixtures carry only 64791360's transaction set: it certifies the
+    // checkpoint's last ledger, and no other.
+    let out = cli()
+        .args(["certify", "--ledger", LEDGER, "--scp", SCP, NEXT_SCP, "--transactions", NEXT_TXS])
+        .output()
+        .unwrap();
+    assert_eq!(out.status.code(), Some(1));
     let s = String::from_utf8(out.stdout).unwrap();
-    assert_eq!(s.lines().filter(|l| l.starts_with("VERIFIED")).count(), 64, "{s}");
+    let verified: Vec<_> = s.lines().filter(|l| l.starts_with("VERIFIED")).collect();
+    assert_eq!(verified.len(), 1, "{s}");
+    assert!(verified[0].starts_with("VERIFIED  ledger 64791359  8ad992fd"), "{s}");
+    assert_eq!(s.lines().filter(|l| l.starts_with("NOT CERTIFIED  ledger ")).count(), 63, "{s}");
+    assert!(String::from_utf8(out.stderr).unwrap().contains("1 of 64 ledgers certified"));
+}
+
+#[test]
+fn certify_without_the_next_checkpoint_never_certifies_the_last_ledger() {
+    let out = cli().args(["certify", "--ledger", LEDGER, "--scp", SCP, "--transactions", NEXT_TXS]).output().unwrap();
+    assert_eq!(out.status.code(), Some(1));
+    let s = String::from_utf8(out.stdout).unwrap();
+    assert!(!s.contains("VERIFIED"), "{s}");
+    assert!(s.contains("NOT CERTIFIED  ledger 64791359: not certified"), "{s}");
 }
 
 #[test]
@@ -172,13 +195,17 @@ fn certify_fails_against_the_wrong_trust_set() {
     let dir = std::env::temp_dir().join("externalize-testnet-trust.toml");
     std::fs::write(
         &dir,
-        "network = \"testnet\"
+        "network = "testnet"
 threshold = 1
-validators = [\"GABMKJM6I25XI4K7U6XWMULOUQIQ27BCTMLS6BYYSOWKTBUXVRJSXHYQ\"]
+validators = ["GABMKJM6I25XI4K7U6XWMULOUQIQ27BCTMLS6BYYSOWKTBUXVRJSXHYQ"]
 ",
     )
     .unwrap();
-    cli().args(["certify", "--ledger", LEDGER, "--scp", SCP, "--trust", dir.to_str().unwrap()]).assert().code(1);
+    cli()
+        .args(["certify", "--ledger", LEDGER, "--scp", SCP, NEXT_SCP, "--transactions", NEXT_TXS])
+        .args(["--trust", dir.to_str().unwrap()])
+        .assert()
+        .code(1);
 }
 
 const TESTNET: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../externalize-core/tests/fixtures/testnet");
@@ -191,15 +218,36 @@ fn testnet_has_a_built_in_trust_set() {
         .arg(format!("{TESTNET}/ledger-004d19ff.xdr.gz"))
         .arg("--scp")
         .arg(format!("{TESTNET}/scp-004d19ff.xdr.gz"))
+        .arg(format!("{TESTNET}/scp-004d1a3f.xdr.gz"))
+        .arg("--transactions")
+        .arg(format!("{TESTNET}/transactions-004d19ff.xdr.gz"))
+        .arg(format!("{TESTNET}/transactions-5052928.xdr.gz"))
         .output()
         .unwrap();
     assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
+    let s = String::from_utf8(out.stdout).unwrap();
+    assert_eq!(s.lines().filter(|l| l.starts_with("VERIFIED")).count(), 64, "{s}");
     assert!(stdout(cli().args(["trust", "show", "--network", "testnet"])).contains("Stellar Development Foundation"));
 }
 
 #[test]
 fn mainnet_signatures_do_not_certify_testnet_trust() {
-    cli().args(["certify", "--network", "testnet", "--ledger", LEDGER, "--scp", SCP]).assert().code(1);
+    let out = cli()
+        .args(["certify", "--network", "testnet", "--ledger", LEDGER, "--scp", SCP, NEXT_SCP])
+        .args(["--transactions", NEXT_TXS])
+        .output()
+        .unwrap();
+    assert_eq!(out.status.code(), Some(1));
+    assert!(!String::from_utf8(out.stdout).unwrap().contains("VERIFIED"));
+}
+
+#[test]
+fn v1_bundles_are_refused_and_must_be_rebuilt() {
+    let v1 = std::fs::read_to_string(BUNDLE).unwrap().replacen("externalize/bundle/v2", "externalize/bundle/v1", 1);
+    let out = cli().args(["verify", "-"]).write_stdin(v1).output().unwrap();
+    assert_eq!(out.status.code(), Some(1));
+    let err = String::from_utf8(out.stderr).unwrap();
+    assert!(err.contains("does not certify the whole ledger header") && err.contains("bundle/v2"), "{err}");
 }
 
 #[test]

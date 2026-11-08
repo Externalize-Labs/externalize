@@ -7,7 +7,9 @@ use std::process::ExitCode;
 
 use clap::{Parser, Subcommand};
 use externalize_core::bundle::{Claim, Verified};
-use externalize_core::xdr::{LedgerHeaderHistoryEntry, ReadXdr, ScpHistoryEntry, ScpQuorumSet, ScpStatementPledges};
+use externalize_core::xdr::{
+    LedgerHeaderHistoryEntry, ReadXdr, ScpHistoryEntry, ScpQuorumSet, ScpStatementPledges, TransactionHistoryEntry,
+};
 use externalize_core::{Bundle, Network, TrustSet, archive, prove_ancestor, quorum, report};
 
 #[derive(Parser)]
@@ -45,14 +47,22 @@ enum Command {
         #[arg(long)]
         json: bool,
     },
-    /// Certify every ledger in a history archive checkpoint, from its `ledger-*` and `scp-*` files.
+    /// Certify every ledger in a history archive checkpoint, from its `ledger-*`,
+    /// `scp-*` and `transactions-*` files.
+    ///
+    /// Each ledger is certified by the next one's consensus, so the checkpoint's
+    /// last ledger also needs the next checkpoint's `scp-*` and
+    /// `transactions-*` files; without them it is reported as not certified.
     Certify {
         /// `ledger-*.xdr.gz` file.
         #[arg(long)]
         ledger: PathBuf,
-        /// `scp-*.xdr.gz` file from the same checkpoint.
-        #[arg(long)]
-        scp: PathBuf,
+        /// `scp-*.xdr.gz` files: the checkpoint's, and the next one's.
+        #[arg(long, required = true, num_args = 1..)]
+        scp: Vec<PathBuf>,
+        /// `transactions-*.xdr.gz` files: the checkpoint's, and the next one's.
+        #[arg(long, required = true, num_args = 1..)]
+        transactions: Vec<PathBuf>,
         /// Trust set. Defaults to the built-in set for `--network`.
         #[arg(long)]
         trust: Option<PathBuf>,
@@ -132,7 +142,9 @@ fn run(cli: Cli) -> Result<ExitCode, String> {
             }
             Ok(ExitCode::SUCCESS)
         }
-        Command::Certify { ledger, scp, trust, network } => certify(&ledger, &scp, trust.as_deref(), &network),
+        Command::Certify { ledger, scp, transactions, trust, network } => {
+            certify(&ledger, &scp, &transactions, trust.as_deref(), &network)
+        }
         Command::Ancestry { bundle, headers, ledger, trust, json } => {
             ancestry(&bundle, &headers, ledger, trust.as_deref(), json)
         }
@@ -333,15 +345,37 @@ fn read_scp(path: &Path) -> Result<Vec<ScpHistoryEntry>, String> {
     read_gz(path)
 }
 
-/// Certifies each ledger of a checkpoint. Exit status 1 if any ledger fails.
-fn certify(ledger: &Path, scp: &Path, trust: Option<&Path>, network: &str) -> Result<ExitCode, String> {
+/// Certifies each ledger of a checkpoint. Exit status 1 if any ledger is not certified.
+fn certify(
+    ledger: &Path,
+    scp_files: &[PathBuf],
+    tx_files: &[PathBuf],
+    trust: Option<&Path>,
+    network: &str,
+) -> Result<ExitCode, String> {
     let trust = load_trust(trust, network)?;
-    let certs = archive::certificates(read_gz(ledger)?, &read_scp(scp)?);
+    let mut scp = Vec::new();
+    for f in scp_files {
+        scp.extend(read_scp(f)?);
+    }
+    let mut transactions = Vec::new();
+    for f in tx_files {
+        transactions.extend(read_gz::<TransactionHistoryEntry>(f)?);
+    }
+    let certs = archive::certificates(read_gz(ledger)?, &scp, &transactions);
     if certs.is_empty() {
         return Err("no ledger in the files has SCP messages".into());
     }
     let mut failed = 0usize;
     for cert in &certs {
+        let cert = match cert {
+            Ok(c) => c,
+            Err(e) => {
+                failed = failed.saturating_add(1);
+                println!("NOT CERTIFIED  {e}");
+                continue;
+            }
+        };
         let seq = cert.header.header.ledger_seq;
         match cert.verify(&trust) {
             Ok(l) => println!("VERIFIED  ledger {seq}  {}  {} signers", hex::encode(l.hash()), l.signers().len()),

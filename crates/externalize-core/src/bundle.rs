@@ -17,7 +17,10 @@ use crate::inclusion::{self, Invocation};
 use crate::{Error, TrustSet};
 
 /// Format tag every bundle carries.
-pub const FORMAT: &str = "externalize/bundle/v1";
+pub const FORMAT: &str = "externalize/bundle/v2";
+
+/// The retired format, which certified only the header's `scpValue`. Refused with [`Error::V1Bundle`].
+pub const FORMAT_V1: &str = "externalize/bundle/v1";
 
 /// Most claims one bundle may carry.
 pub const MAX_CLAIMS: usize = 256;
@@ -40,6 +43,10 @@ pub struct Bundle {
     pub ledger: Xdr<LedgerHeaderHistoryEntry>,
     /// `ScpHistoryEntry` recorded for the ledger.
     pub scp: Xdr<ScpHistoryEntry>,
+    /// `ScpHistoryEntry` recorded for the next ledger, whose consensus commits to this header.
+    pub next_scp: Xdr<ScpHistoryEntry>,
+    /// The next ledger's `TransactionHistoryEntry`; its set names this header's hash.
+    pub next_transactions: Xdr<TransactionHistoryEntry>,
     /// `TransactionHistoryResultEntry`, required by every claim.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub results: Option<Xdr<TransactionHistoryResultEntry>>,
@@ -86,11 +93,14 @@ pub struct Verified {
 impl Bundle {
     /// Parses a bundle from JSON.
     pub fn from_json(text: &str) -> Result<Self, Error> {
-        let b: Self =
-            serde_json::from_str(text).map_err(|e| Error::Format { what: "bundle", reason: e.to_string() })?;
-        if b.format != FORMAT {
-            return Err(Error::Format { what: "bundle", reason: format!("unknown format {:?}", b.format) });
+        let bad = |e: serde_json::Error| Error::Format { what: "bundle", reason: e.to_string() };
+        // The tag first, so a v1 bundle is named as such rather than as missing fields.
+        #[derive(Deserialize)]
+        struct Tag {
+            format: String,
         }
+        check_format(&serde_json::from_str::<Tag>(text).map_err(bad)?.format)?;
+        let b: Self = serde_json::from_str(text).map_err(bad)?;
         b.check_limits()?;
         Ok(b)
     }
@@ -123,7 +133,13 @@ impl Bundle {
                 actual: self.network.clone(),
             });
         }
-        let cert = Certificate { header: self.ledger.0.clone(), scp: self.scp.0.clone() };
+        check_format(&self.format)?;
+        let cert = Certificate {
+            header: self.ledger.0.clone(),
+            scp: self.scp.0.clone(),
+            next_scp: self.next_scp.0.clone(),
+            next_transactions: self.next_transactions.0.clone(),
+        };
         let ledger = cert.verify(trust)?;
         if self.claims.is_empty() {
             return Ok(Verified { ledger, claims: Vec::new() });
@@ -156,6 +172,14 @@ impl Bundle {
             claims.push((claim.clone(), succeeded));
         }
         Ok(Verified { ledger, claims })
+    }
+}
+
+fn check_format(format: &str) -> Result<(), Error> {
+    match format {
+        FORMAT => Ok(()),
+        FORMAT_V1 => Err(Error::V1Bundle),
+        other => Err(Error::Format { what: "bundle", reason: format!("unknown format {other:?}") }),
     }
 }
 

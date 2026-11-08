@@ -109,9 +109,18 @@ function renderRejected(text, error, note) {
       <dt>Claims</dt><dd>${seen.claims.length}</dd></dl>
       <p class="muted">Nothing in a rejected bundle can be relied on. A genuine bundle from <code>exnode</code> verifies; if yours should, check it was built for the same network.</p>`;
   } catch {
+    if (formatOf(text) === "externalize/bundle/v1") {
+      html += `<p class="muted">This is a version 1 bundle. Version 1 bundles prove only part of the ledger header, so their results, events and ancestry could be forged. Rebuild it with a current <a href="https://github.com/Externalize-Labs/externalize-node">exnode</a>, which makes version 2 bundles.</p>`;
+      return message(html);
+    }
     html += `<p class="muted">This doesn't look like an Externalize bundle at all. Bundles are JSON files produced by <a href="https://github.com/Externalize-Labs/externalize-node">exnode</a>.</p>`;
   }
   message(html);
+}
+
+// The bundle's format tag, if it is JSON with one.
+function formatOf(text) {
+  try { return JSON.parse(text).format; } catch { return undefined; }
 }
 
 async function sample() {
@@ -225,14 +234,16 @@ async function fetchBundle(tx) {
   return { text: JSON.stringify(body, null, 2), kind: "transaction" };
 }
 
+// A ledger is certified by the next ledger's consensus, so its proof needs
+// the checkpoint that holds ledger + 1.
 function waitForArchive(tx, tip, attempt) {
-  const checkpoint = Math.ceil((tx.ledger + 1) / CHECKPOINT) * CHECKPOINT - 1;
+  const checkpoint = Math.ceil((tx.ledger + 2) / CHECKPOINT) * CHECKPOINT - 1;
   const ledgersLeft = Math.max(checkpoint - tip, 0);
   const minutes = Math.max(1, Math.round((ledgersLeft * 6) / 60) + 1);
   message(`<p class="verdict wait"><span class="mark" aria-hidden="true">…</span>Waiting for the history archive</p>
     <p>This transaction is in ledger ${tx.ledger.toLocaleString("en-US")}, but validators have archived only up to
-      ${tip.toLocaleString("en-US")}. Its signatures are published with checkpoint ${checkpoint.toLocaleString("en-US")},
-      about ${minutes} minute${minutes === 1 ? "" : "s"} from now.</p>
+      ${tip.toLocaleString("en-US")}. Its proof needs the signatures of the ledger after it, published with checkpoint
+      ${checkpoint.toLocaleString("en-US")}, about ${minutes} minute${minutes === 1 ? "" : "s"} from now.</p>
     <p class="muted">This page will try again by itself every 30 seconds (attempt ${attempt}).
       <button type="button" id="cancel-wait">Stop waiting</button></p>`);
   document.getElementById("cancel-wait").addEventListener("click", stopWaiting);
@@ -258,7 +269,7 @@ async function prove(hash, attempt = 1) {
     steps(0);
     const tx = { ...(await lookUp(hash)), input: hash };
     const tip = await archiveTip();
-    if (tx.ledger > tip) return waitForArchive(tx, tip, attempt);
+    if (tx.ledger + 1 > tip) return waitForArchive(tx, tip, attempt);
     steps(1, `Ledger ${tx.ledger.toLocaleString("en-US")}. Asking ${esc(new URL(NODE).host)} for the archived signatures and results…`);
     const bundle = await fetchBundle(tx);
     steps(2);

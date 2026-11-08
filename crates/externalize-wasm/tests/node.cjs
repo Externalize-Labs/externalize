@@ -25,6 +25,10 @@ const tampered = pkg.verify(bundle.replace('"ledger": "', '"ledger": "AAAA'));
 assert.equal(tampered.verified, false);
 assert.ok(tampered.error.length > 0);
 
+const v1 = pkg.verify(bundle.replace("externalize/bundle/v2", "externalize/bundle/v1"));
+assert.equal(v1.verified, false);
+assert.match(v1.error, /does not certify the whole ledger header/);
+
 const testnet = pkg.builtinTrust("Test SDF Network ; September 2015");
 assert.match(pkg.verify(bundle, testnet).error, /network mismatch/);
 assert.equal(pkg.builtinTrust("Standalone Network ; February 2017"), undefined);

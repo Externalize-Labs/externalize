@@ -44,6 +44,14 @@ fn rejections_are_reports_not_errors() {
 }
 
 #[test]
+fn v1_bundles_are_rejected_with_a_reason() {
+    let v1 = BUNDLE.replacen("externalize/bundle/v2", "externalize/bundle/v1", 1);
+    let r = run(&v1, None, false);
+    assert_eq!(r["verified"], false, "{r}");
+    assert!(r["error"].as_str().unwrap().contains("rebuild it as externalize/bundle/v2"), "{r}");
+}
+
+#[test]
 fn inspect_describes_without_verifying() {
     let r: Value = serde_json::from_str(&inspect_to_json(BUNDLE).unwrap()).unwrap();
     assert_eq!(r["verified"], false, "inspection never claims verification");

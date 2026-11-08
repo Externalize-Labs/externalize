@@ -42,16 +42,17 @@ public RPC, neither of which the verifier trusts.
 
 | Claim | Status |
 |---|---|
-| Ledger N was externalized by your trust set | ✅ |
+| Ledger N's whole header was externalized by your trust set | ✅ through ledger N+1's consensus; 0.1.x–0.2.0 certified only `scpValue` (see [CHANGELOG](CHANGELOG.md)) |
 | Ledgers older than a certified one (hash chain) | ✅ |
 | A transaction was applied, and whether it succeeded | ✅ |
 | A transaction's full body | ✅ with `--txset` |
 | A Soroban call's return value and contract events | ✅ |
 | Events from classic operations, ledger state | ❌ not committed by the header ([why](docs/trust-model.md#what-cannot-be-proven-yet)) |
 
-Verification is fail-closed. Forged headers, signatures from another network, a
-quorum one org short, a dropped or reordered event, or a trusted validator
-signing a different value all reject the whole bundle. The test suite does
+Verification is fail-closed. Forged headers (including a rewritten result set
+or previous-ledger hash with the header hash recomputed), signatures from
+another network, a quorum one org short, a dropped or reordered event, or a
+trusted validator signing a different value all reject the whole bundle. The test suite does
 each of these to real mainnet data.
 
 ## Quick start
@@ -76,7 +77,7 @@ as `#tx=<hash>`, and the bundle can be downloaded to verify again offline.
 |---|---|
 | `externalize verify proof.json` | Verify a bundle; `--events` decodes every proven contract event, `--json` for machines. Exit 0 verified, 1 rejected, 2 could not run |
 | `externalize inspect proof.json` | Show what a bundle claims, without trusting any of it; `--json` for machines |
-| `externalize certify --ledger ledger-….xdr.gz --scp scp-….xdr.gz` | Certify all 64 ledgers of a history archive checkpoint |
+| `externalize certify --ledger ledger-….xdr.gz --scp scp-….xdr.gz… --transactions transactions-….xdr.gz…` | Certify the ledgers of a history archive checkpoint; each is certified through the next ledger, so pass the next checkpoint's `scp` and `transactions` files too, or its last ledger is reported as not certified |
 | `externalize ancestry --bundle proof.json --headers ledger-….xdr.gz… --ledger N` | Prove an older ledger: certify the bundle's ledger, then follow previous-ledger hashes back through archived headers to ledger `N`; `--json` for machines |
 | `externalize trust show [--network testnet]` | Print a built-in trust set |
 | `externalize trust derive scp-….xdr.gz --names-from trust/public.toml` | Rebuild a trust set from what validators actually used |
@@ -133,10 +134,17 @@ the mainnet fixture.
 ## How it works
 
 ```text
- SCP EXTERNALIZE ×N ──signatures──▶ LedgerHeader ──txSetResultHash──▶ TransactionResultSet
-  (satisfy trust set)               (scpValue)                         └─ result for tx ─▶ InvokeHostFunction success hash
-                                                                                            = SHA-256(return value ‖ events)
+ SCP EXTERNALIZE, slot N   ──▶ header N's scpValue
+ SCP EXTERNALIZE, slot N+1 ──▶ V.txSetHash ──▶ ledger N+1's tx set ──previousLedgerHash──▶ SHA-256(header N)
+  (each satisfying the trust set)
+
+ header N ──txSetResultHash──▶ TransactionResultSet
+                               └─ result for tx ─▶ InvokeHostFunction success hash = SHA-256(return value ‖ events)
 ```
+
+Slot N's signatures cover only `scpValue`; ledger N+1's consensus binds the
+rest of header N, so a bundle carries ledger N+1's SCP messages and
+transaction set too.
 
 The full argument, including what you still have to trust, is in
 [docs/trust-model.md](docs/trust-model.md). The wire format, for anyone
