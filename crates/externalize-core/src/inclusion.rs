@@ -72,6 +72,32 @@ pub fn verify_transactions(
     Ok(out)
 }
 
+/// The transaction set's hash, computed as stellar-core does, and the
+/// `previousLedgerHash` the set names.
+///
+/// A generalized set (`ext` v1) hashes as `SHA-256(XDR(GeneralizedTransactionSet))`;
+/// a legacy set as `SHA-256(previousLedgerHash ‖ XDR(tx) ‖ …)` over its
+/// envelopes in order. See stellar-core `src/herder/TxSetFrame.cpp` (commit
+/// 362dbc5): the `TxSetXDRFrame` constructors and
+/// `computeNonGeneralizedTxSetContentsHash`.
+pub fn tx_set_hash(entry: &TransactionHistoryEntry) -> Result<([u8; 32], [u8; 32]), Error> {
+    match &entry.ext {
+        TransactionHistoryEntryExt::V1(set) => {
+            let stellar_xdr::GeneralizedTransactionSet::V1(v1) = set;
+            let xdr = set.to_xdr(Limits::none()).map_err(|e| Error::xdr("transaction set", e))?;
+            Ok((sha256(xdr), v1.previous_ledger_hash.0))
+        }
+        TransactionHistoryEntryExt::V0 => {
+            let legacy = &entry.tx_set;
+            let mut data = legacy.previous_ledger_hash.0.to_vec();
+            for tx in legacy.txs.iter() {
+                data.extend(tx.to_xdr(Limits::none()).map_err(|e| Error::xdr("transaction envelope", e))?);
+            }
+            Ok((sha256(data), legacy.previous_ledger_hash.0))
+        }
+    }
+}
+
 /// Finds a transaction's result by hash.
 pub fn find_result<'a>(
     results: &'a [TransactionResultPair],

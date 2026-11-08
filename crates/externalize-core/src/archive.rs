@@ -3,10 +3,11 @@
 //! Archives publish one file per category every 64 ledgers (a checkpoint):
 //! `ledger/` headers, `scp/` consensus messages, `results/` and
 //! `transactions/`. Each file is a gzip of RFC 5531 record-marked XDR.
+//! Certifying a ledger takes the `ledger`, `scp` and `transactions` files.
 
 use std::io::Read;
 
-use stellar_xdr::{Frame, LedgerHeaderHistoryEntry, Limited, ReadXdr, ScpHistoryEntry};
+use stellar_xdr::{Frame, LedgerHeaderHistoryEntry, Limited, ReadXdr, ScpHistoryEntry, TransactionHistoryEntry};
 
 use crate::bundle::DECODE_LIMITS;
 use crate::{Certificate, Error};
@@ -39,16 +40,34 @@ pub fn read_gz_frames<T: ReadXdr>(reader: impl Read) -> Result<Vec<T>, Error> {
     read_frames(flate2::read::GzDecoder::new(reader))
 }
 
-/// Pairs each header with the SCP messages recorded for the same ledger.
+/// Pairs each header with its SCP messages and the next ledger's SCP messages
+/// and transaction set.
 ///
-/// Headers without SCP messages are skipped: there is nothing to certify them with.
-pub fn certificates(headers: Vec<LedgerHeaderHistoryEntry>, scp: &[ScpHistoryEntry]) -> Vec<Certificate> {
+/// `scp` and `transactions` may hold several checkpoints' files: a
+/// checkpoint's last ledger is certified by the next checkpoint's first.
+/// Headers without SCP messages are skipped: there is nothing to certify them
+/// with. A header whose successor data is missing is
+/// [`Error::MissingSuccessor`], never a certificate.
+pub fn certificates(
+    headers: Vec<LedgerHeaderHistoryEntry>,
+    scp: &[ScpHistoryEntry],
+    transactions: &[TransactionHistoryEntry],
+) -> Vec<Result<Certificate, Error>> {
+    let scp_for = |seq: u32| scp.iter().find(|ScpHistoryEntry::V0(e)| e.ledger_messages.ledger_seq == seq).cloned();
     headers
         .into_iter()
         .filter_map(|header| {
             let seq = header.header.ledger_seq;
-            let scp = scp.iter().find(|ScpHistoryEntry::V0(e)| e.ledger_messages.ledger_seq == seq)?.clone();
-            Some(Certificate { header, scp })
+            let scp = scp_for(seq)?;
+            let next = seq.checked_add(1);
+            let next_scp = next.and_then(scp_for);
+            let next_transactions = next.and_then(|n| transactions.iter().find(|t| t.ledger_seq == n).cloned());
+            Some(match (next_scp, next_transactions) {
+                (Some(next_scp), Some(next_transactions)) => {
+                    Ok(Certificate { header, scp, next_scp, next_transactions })
+                }
+                _ => Err(Error::MissingSuccessor(seq)),
+            })
         })
         .collect()
 }

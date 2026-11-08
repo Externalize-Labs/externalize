@@ -28,7 +28,7 @@ proptest! {
     #![proptest_config(ProptestConfig::with_cases(96))]
 
     #[test]
-    fn corrupted_bundles_never_prove_something_else(part in 0usize..4, at in any::<usize>(), bit in any::<u8>()) {
+    fn corrupted_bundles_never_prove_something_else(part in 0usize..6, at in any::<usize>(), bit in any::<u8>()) {
         let original = Bundle::from_json(BUNDLE).unwrap();
         let reference = original.verify(&trust()).unwrap();
         let mut b = original.clone();
@@ -36,6 +36,8 @@ proptest! {
             0 => flip(&b.ledger.0, at, bit).map(|v| b.ledger.0 = v).is_some(),
             1 => flip(&b.scp.0, at, bit).map(|v| b.scp.0 = v).is_some(),
             2 => flip(&b.results.as_ref().unwrap().0, at, bit).map(|v| b.results.as_mut().unwrap().0 = v).is_some(),
+            3 => flip(&b.next_scp.0, at, bit).map(|v| b.next_scp.0 = v).is_some(),
+            4 => flip(&b.next_transactions.0, at, bit).map(|v| b.next_transactions.0 = v).is_some(),
             _ => {
                 let externalize_core::bundle::Claim::Invocation { events, .. } = &mut b.claims[1] else { unreachable!() };
                 let i = at % events.len();
@@ -46,7 +48,9 @@ proptest! {
         if let Ok(v) = b.verify(&trust()) {
             prop_assert_eq!(v.ledger.hash(), reference.ledger.hash());
             prop_assert_eq!(&v.claims, &reference.claims);
-            prop_assert!(part == 1, "only SCP redundancy may absorb a corruption, not part {}", part);
+            // SCP redundancy may absorb a corruption, and so may the legacy `txSet`
+            // field, which a generalized entry carries but does not hash.
+            prop_assert!(matches!(part, 1 | 3 | 4), "part {} absorbed a corruption", part);
         }
     }
 }

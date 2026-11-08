@@ -10,7 +10,8 @@ use crate::{Error, Network};
 /// A network plus the quorum set the verifier treats as its own quorum slice.
 ///
 /// A ledger is accepted only when validators satisfying this set have signed
-/// EXTERNALIZE for it. This is the same decision a watcher node makes with
+/// EXTERNALIZE for it and for the next ledger, whose transaction set names its
+/// header. This is the same decision a watcher node makes with
 /// the same configuration; see `docs/trust-model.md`.
 #[derive(Clone, Debug)]
 pub struct TrustSet {

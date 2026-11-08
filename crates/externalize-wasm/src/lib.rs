@@ -27,14 +27,14 @@ export interface OrgAgreement {
   satisfied: boolean;
 }
 
-/** A ledger whose header the trust set's validators signed. */
+/** A ledger whose whole header the trust set certified, through its own and the next ledger's signatures. */
 export interface CertifiedLedger {
   sequence: number;
   /** Ledger hash, lowercase hex. */
   hash: string;
   /** Close time, Unix seconds. */
   close_time: number;
-  /** Validators whose signatures verified, as G… strkeys. */
+  /** Validators whose signatures for this ledger verified, as G… strkeys. */
   signers: string[];
   orgs: OrgAgreement[];
 }
@@ -107,12 +107,13 @@ export type InspectClaim =
   | { kind: "invocation"; tx_hash: string; op_index: number; events: number };
 "#;
 
-/// Verifies a proof bundle (JSON text) and returns the report as an object.
+/// Verifies a proof bundle (`externalize/bundle/v2` JSON text) and returns the report as an object.
 ///
 /// Without `trust_toml`, the built-in trust set for the bundle's network is
 /// used (public network tier-1, or testnet). With `events`, invocation claims
 /// list their proven contract events, decoded. A bundle that does not verify
-/// yields `{ verified: false, error }`; nothing throws.
+/// yields `{ verified: false, error }`; nothing throws. A v1 bundle is
+/// rejected: it does not certify the whole ledger header.
 #[wasm_bindgen(unchecked_return_type = "VerifyReport | Rejection")]
 pub fn verify(bundle_json: &str, trust_toml: Option<String>, events: Option<bool>) -> JsValue {
     let report = verify_to_json(bundle_json, trust_toml.as_deref(), events.unwrap_or(false));

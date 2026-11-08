@@ -10,10 +10,15 @@ const BUNDLE: &str = include_str!("../tests/fixtures/mainnet/bundle-64791359.jso
 fn bench(c: &mut Criterion) {
     let trust = TrustSet::from_toml(include_str!("../../../trust/public.toml")).unwrap();
     let bundle = Bundle::from_json(BUNDLE).unwrap();
-    let cert = externalize_core::Certificate { header: bundle.ledger.0.clone(), scp: bundle.scp.0.clone() };
+    let cert = externalize_core::Certificate {
+        header: bundle.ledger.0.clone(),
+        scp: bundle.scp.0.clone(),
+        next_scp: bundle.next_scp.0.clone(),
+        next_transactions: bundle.next_transactions.0.clone(),
+    };
 
-    c.bench_function("parse bundle (111 KB JSON)", |b| b.iter(|| Bundle::from_json(BUNDLE).unwrap()));
-    c.bench_function("certify ledger (30 signatures)", |b| b.iter(|| cert.verify(&trust).unwrap()));
+    c.bench_function("parse bundle", |b| b.iter(|| Bundle::from_json(BUNDLE).unwrap()));
+    c.bench_function("certify ledger (slots N and N+1)", |b| b.iter(|| cert.verify(&trust).unwrap()));
     c.bench_function("verify bundle (certificate + 2 claims)", |b| b.iter(|| bundle.verify(&trust).unwrap()));
 }
 

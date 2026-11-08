@@ -74,6 +74,23 @@ pub enum Error {
         what: &'static str,
     },
 
+    /// The next ledger's SCP messages or transaction set, which certify this
+    /// header, were not supplied.
+    #[error(
+        "ledger {0}: not certified; only the next ledger's consensus commits to this header, so supply its SCP messages and transaction set"
+    )]
+    MissingSuccessor(u32),
+
+    /// The next ledger's transaction set does not hash to the `txSetHash` its
+    /// validators externalized.
+    #[error("ledger {0}: transaction set does not hash to the txSetHash its validators externalized")]
+    SuccessorTxSetMismatch(u32),
+
+    /// The header is not the one the next ledger's transaction set names as
+    /// its previous ledger.
+    #[error("ledger {0}: header hash is not the previousLedgerHash committed by the next ledger's consensus")]
+    HeaderNotCommitted(u32),
+
     /// The ledger was closed with a pre-protocol-20 transaction set, which is unsupported.
     #[error("ledger {0}: legacy (non-generalized) transaction sets are not supported")]
     LegacyTransactionSet(u32),
@@ -135,6 +152,12 @@ pub enum Error {
         /// The limit.
         limit: usize,
     },
+
+    /// The bundle is `externalize/bundle/v1`, which certifies only the header's `scpValue`.
+    #[error(
+        "bundle format externalize/bundle/v1 does not certify the whole ledger header (results, events and ancestry in it can be forged); rebuild it as externalize/bundle/v2"
+    )]
+    V1Bundle,
 
     /// The bundle or trust file is not valid JSON/TOML or has an unknown format tag.
     #[error("invalid {what}: {reason}")]
