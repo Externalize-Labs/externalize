@@ -100,8 +100,8 @@ let verified = Bundle::from_json(&std::fs::read_to_string("proof.json")?)?.verif
 println!("ledger {} certified by {} validators", verified.ledger.sequence(), verified.ledger.signers().len());
 ```
 
-Verifying the mainnet fixture bundle (30 signatures and two claims) takes
-about 6.6 ms on a laptop; `cargo bench` reproduces it.
+`cargo bench` measures verifying the mainnet fixture bundle (30 signatures
+for each of two slots, the successor's transaction set, and two claims).
 
 The lower-level API (`Certificate`, `inclusion`, `prove_ancestor`,
 `verify_ancestors`, `archive`) works on raw XDR with no JSON involved.
@@ -161,7 +161,7 @@ producing or verifying bundles in another language, is specified in
 | `examples/web` | A browser page that verifies a bundle locally |
 | `trust/` | Public-network and testnet trust sets, derived from archived SCP data |
 | `docs/` | Trust model and bundle format specification |
-| `crates/externalize-core/tests/fixtures/mainnet` | Real archive checkpoint and RPC data; `bundle-64791359.json` is the conformance fixture `exnode` must reproduce byte for byte |
+| `crates/externalize-core/tests/fixtures` | Real mainnet and testnet archive and RPC data, with sources in its README; `mainnet/bundle-64791359.json` is the conformance fixture `exnode` must reproduce byte for byte |
 
 ## Roadmap
 
