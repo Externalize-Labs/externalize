@@ -195,9 +195,9 @@ fn certify_fails_against_the_wrong_trust_set() {
     let dir = std::env::temp_dir().join("externalize-testnet-trust.toml");
     std::fs::write(
         &dir,
-        "network = "testnet"
+        "network = \"testnet\"
 threshold = 1
-validators = ["GABMKJM6I25XI4K7U6XWMULOUQIQ27BCTMLS6BYYSOWKTBUXVRJSXHYQ"]
+validators = [\"GABMKJM6I25XI4K7U6XWMULOUQIQ27BCTMLS6BYYSOWKTBUXVRJSXHYQ\"]
 ",
     )
     .unwrap();

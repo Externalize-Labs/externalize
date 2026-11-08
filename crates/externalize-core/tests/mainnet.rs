@@ -562,7 +562,10 @@ mod synthetic {
             node_id: node(k),
             slot_index: u64::from(slot),
             pledges: ScpStatementPledges::Externalize(ScpStatementExternalize {
-                commit: ScpBallot { counter: 1, value: Value(value.to_xdr(Limits::none()).unwrap().try_into().unwrap()) },
+                commit: ScpBallot {
+                    counter: 1,
+                    value: Value(value.to_xdr(Limits::none()).unwrap().try_into().unwrap()),
+                },
                 n_h: 1,
                 commit_quorum_set_hash: Hash([0; 32]),
             }),
@@ -640,7 +643,8 @@ fn v1_bundles_are_refused_with_a_reason() {
     assert!(err.to_string().contains("rebuild it as externalize/bundle/v2"), "{err}");
 
     // Retagged as v1, even with the successor fields.
-    let json = bundle().to_json().unwrap().replace(externalize_core::bundle::FORMAT, externalize_core::bundle::FORMAT_V1);
+    let json =
+        bundle().to_json().unwrap().replace(externalize_core::bundle::FORMAT, externalize_core::bundle::FORMAT_V1);
     assert_eq!(Bundle::from_json(&json).unwrap_err(), Error::V1Bundle);
 
     let mut b = bundle();

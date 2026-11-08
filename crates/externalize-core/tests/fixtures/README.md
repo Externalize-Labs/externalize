@@ -32,13 +32,15 @@ file `<cat>-<hex>.xdr.gz` lives at `<cat>/<hex[0..2]>/<hex[2..4]>/<hex[4..6]>/`.
 | `scp-004d1a3f.xdr.gz` | testnet archive `scp/00/4d/1a/scp-004d1a3f.xdr.gz` |
 | `transactions-5052928.xdr.gz` | ledger 5052928's entry of `transactions/00/4d/1a/transactions-004d1a3f.xdr.gz`, framed |
 
-## `legacy/`: mainnet ledger 50000000, protocol 19 (`02faf0bf`)
+## `legacy/`: mainnet ledgers 50000000 and 50000001, protocol 19 (`02faf0bf`)
 
-Ledger 50000001 has a legacy (non-generalized) transaction set.
+Ledger 50000001 has a legacy (non-generalized) transaction set. The archive's
+SCP history for this checkpoint holds one trusted signature per ledger, too
+few for a quorum, so `tests/legacy.rs` checks the legacy set hash against the
+genuine header and runs `Certificate::verify` with synthetic validators
+re-signing the genuine values.
 
 | File | Source |
 |---|---|
-| `ledger-50000000.xdr.gz` | ledger 50000000's entry of `ledger/02/fa/f0/ledger-02faf0bf.xdr.gz`, framed |
-| `scp-50000000.xdr.gz` | ledgers 50000000 and 50000001's entries of `scp/02/fa/f0/scp-02faf0bf.xdr.gz`, framed |
+| `ledger-50000000-50000001.xdr.gz` | ledgers 50000000 and 50000001's entries of `ledger/02/fa/f0/ledger-02faf0bf.xdr.gz`, framed |
 | `transactions-50000001.xdr.gz` | ledger 50000001's entry of `transactions/02/fa/f0/transactions-02faf0bf.xdr.gz`, framed |
-| `trust.toml` | `externalize trust derive scp-02faf0bf.xdr.gz --names-from trust/public.toml`: the quorum set validators used then |

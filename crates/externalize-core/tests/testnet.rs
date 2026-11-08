@@ -35,7 +35,8 @@ fn transactions() -> Vec<TransactionHistoryEntry> {
 fn every_testnet_ledger_is_certified_and_chained() {
     let trust = trust();
     let headers: Vec<LedgerHeaderHistoryEntry> = open("ledger-004d19ff.xdr.gz");
-    let certs: Vec<_> = archive::certificates(headers, &scp(), &transactions()).into_iter().map(Result::unwrap).collect();
+    let certs: Vec<_> =
+        archive::certificates(headers, &scp(), &transactions()).into_iter().map(Result::unwrap).collect();
     assert_eq!(certs.len(), 64);
     for c in &certs {
         assert!(c.verify(&trust).unwrap().signers().len() >= 2);
